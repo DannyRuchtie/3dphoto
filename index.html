@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Photo Viewer</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.7.4/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <style>
+        body { margin: 0; }
+        canvas { display: block; }
+        #upload-container {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 20px;
+            border-radius: 8px;
+            z-index: 1000;
+        }
+        #status {
+            margin-top: 10px;
+            color: #333;
+        }
+        #tempCanvas {
+            display: none;
+        }
+        #depthPreview {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 10px;
+            border-radius: 8px;
+            max-width: 200px;
+        }
+    </style>
+</head>
+<body>
+    <div id="upload-container">
+        <input type="file" id="imageInput" accept="image/*">
+        <button onclick="processImage()">Process & View in 3D</button>
+        <div id="status"></div>
+    </div>
+    <canvas id="tempCanvas"></canvas>
+    <div id="depthPreview">
+        <h3>Depth Map Preview</h3>
+        <canvas id="previewCanvas"></canvas>
+    </div>
+
+    <script>
+        let scene, camera, renderer;
+        let mesh;
+        let model;
+
+        class DepthEstimator {
+            async init() {
+                // Load MobileNet for feature extraction
+                this.baseModel = await mobilenet.load();
+                this.height = 384;
+                this.width = 640;
+                return this;
+            }
+
+            async predict(img) {
+                const tensor = tf.browser.fromPixels(img);
+                const resized = tf.image.resizeBilinear(tensor, [this.height, this.width]);
+                const normalized = resized.div(255.0);
+                
+                // Get features from MobileNet
+                const features = this.baseModel.infer(normalized, true);
+                
+                // Simple depth estimation using feature activation
+                const depth = tf.tidy(() => {
+                    const activation = features.mean(-1);
+                    const normalized = activation.sub(activation.min())
+                                              .div(activation.max().sub(activation.min()))
+                                              .mul(255);
+                    return normalized.expandDims(-1);
+                });
+
+                const depthData = await depth.data();
+                tensor.dispose();
+                resized.dispose();
+                normalized.dispose();
+                features.dispose();
+                depth.dispose();
+
+                return [Array.from(depthData)];
+            }
+        }
+
+        function init() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            camera.position.z = 5;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+            directionalLight.position.set(5, 5, 5);
+            scene.add(directionalLight);
+
+            animate();
+        }
+
+        async function processImage() {
+            const fileInput = document.getElementById('imageInput');
+            const statusDiv = document.getElementById('status');
+            
+            if (!fileInput.files.length) {
+                statusDiv.textContent = 'Please select an image first';
+                return;
+            }
+
+            statusDiv.textContent = 'Processing image...';
+
+            const img = new Image();
+            img.onload = async function() {
+                // Generate depth map
+                const [depthData] = await model.predict(img);
+                
+                // Create depth map image
+                const tempCanvas = document.getElementById('tempCanvas');
+                const previewCanvas = document.getElementById('previewCanvas');
+                tempCanvas.width = model.width;
+                tempCanvas.height = model.height;
+                previewCanvas.width = 200;
+                previewCanvas.height = 150;
+
+                // Draw depth map on temp canvas
+                const ctx = tempCanvas.getContext('2d');
+                const imageData = ctx.createImageData(model.width, model.height);
+                for (let i = 0; i < depthData.length; i++) {
+                    const idx = i * 4;
+                    imageData.data[idx] = depthData[i];
+                    imageData.data[idx + 1] = depthData[i];
+                    imageData.data[idx + 2] = depthData[i];
+                    imageData.data[idx + 3] = 255;
+                }
+                ctx.putImageData(imageData, 0, 0);
+
+                // Draw preview
+                const previewCtx = previewCanvas.getContext('2d');
+                previewCtx.drawImage(tempCanvas, 0, 0, 200, 150);
+
+                // Create 3D visualization
+                createDisplacementMesh(img, tempCanvas);
+                statusDiv.textContent = 'Processing complete!';
+            };
+            
+            img.src = URL.createObjectURL(fileInput.files[0]);
+        }
+
+        function createDisplacementMesh(imageElement, depthCanvas) {
+            // Create texture from original image
+            const texture = new THREE.Texture(imageElement);
+            texture.needsUpdate = true;
+
+            // Create depth map texture
+            const depthTexture = new THREE.Texture(depthCanvas);
+            depthTexture.needsUpdate = true;
+
+            // Remove existing mesh if it exists
+            if (mesh) {
+                scene.remove(mesh);
+            }
+
+            const geometry = new THREE.PlaneGeometry(3, 3, 128, 128);
+            const material = new THREE.MeshPhongMaterial({
+                map: texture,
+                displacementMap: depthTexture,
+                displacementScale: 0.5,
+                side: THREE.DoubleSide
+            });
+
+            mesh = new THREE.Mesh(geometry, material);
+            scene.add(mesh);
+
+            // Reset camera position
+            camera.position.z = 5;
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            if (mesh) {
+                mesh.rotation.y += 0.005;
+            }
+            renderer.render(scene, camera);
+        }
+
+        // Initialize Three.js scene
+        init();
+
+        // Initialize depth estimation model
+        async function setupModel() {
+            model = await new DepthEstimator().init();
+            document.getElementById('status').textContent = 'Ready to process images';
+        }
+        setupModel();
+
+        // Handle window resizing
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        // Add mouse controls for rotation
+        let isDragging = false;
+        let previousMousePosition = { x: 0, y: 0 };
+
+        document.addEventListener('mousedown', (e) => {
+            isDragging = true;
+        });
+
+        document.addEventListener('mousemove', (e) => {
+            if (isDragging && mesh) {
+                const deltaMove = {
+                    x: e.offsetX - previousMousePosition.x,
+                    y: e.offsetY - previousMousePosition.y
+                };
+
+                mesh.rotation.y += deltaMove.x * 0.01;
+                mesh.rotation.x += deltaMove.y * 0.01;
+            }
+
+            previousMousePosition = {
+                x: e.offsetX,
+                y: e.offsetY
+            };
+        });
+
+        document.addEventListener('mouseup', () => {
+            isDragging = false;
+        });
+    </script>
+</body>
+</html> 
