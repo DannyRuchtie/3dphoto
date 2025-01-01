@@ -88,6 +88,7 @@
             z-index: 1000;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
+            display: none;
         }
         #status {
             margin-top: 10px;
@@ -176,6 +177,7 @@
             cameraDistance: 2,
             invertCamera: true,
             showUI: true,
+            depthStrength: 0.4,
             selectedImage: 'images/example-1.jpeg',
             imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg'],
             loadImage: function() {
@@ -436,8 +438,8 @@
                 uniforms: {
                     map: { value: texture },
                     displacementMap: { value: depthTexture },
-                    displacementScale: { value: 0.15 },
-                    displacementBias: { value: -0.15 }
+                    displacementScale: { value: controls.depthStrength },
+                    displacementBias: { value: -controls.depthStrength }
                 },
                 vertexShader: vertexShader,
                 fragmentShader: fragmentShader,
@@ -675,6 +677,13 @@
             trackingFolder.add(controls, 'cameraDistance', 0.5, 3.0).name('Camera Distance')
                 .onChange((value) => {
                     initialCameraPosition.z = value;
+                });
+            trackingFolder.add(controls, 'depthStrength', 0.1, 1.0).name('Depth Strength')
+                .onChange((value) => {
+                    if (mesh && mesh.material.uniforms) {
+                        mesh.material.uniforms.displacementScale.value = value;
+                        mesh.material.uniforms.displacementBias.value = -value;
+                    }
                 });
             trackingFolder.add(controls, 'invertCamera').name('Invert Camera Movement');
             trackingFolder.add(controls, 'showUI').name('Show UI')
