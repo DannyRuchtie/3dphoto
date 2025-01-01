@@ -165,7 +165,7 @@
             cameraDistance: 2,
             invertCamera: true,
             showUI: true,
-            depthStrength: 0.32,
+            depthStrength: 0.13,
             selectedImage: 'images/example-1.jpeg',
             imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg', 'images/example-4.jpeg', 'images/example-5.jpeg'],
             processImage: function() {
@@ -305,7 +305,9 @@
             renderer.domElement.classList.add('webgl');
             document.body.appendChild(renderer.domElement);
 
-            camera.position.z = controls.cameraDistance;
+            // Set initial camera position to be perfectly centered
+            camera.position.set(0, 0, controls.cameraDistance);
+            camera.lookAt(0, 0, 0);
             initialCameraPosition = { x: 0, y: 0, z: controls.cameraDistance };
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
@@ -456,9 +458,15 @@
             });
 
             mesh = new THREE.Mesh(geometry, material);
+            // Ensure mesh is perfectly centered and parallel to camera
+            mesh.position.set(0, 0, 0);
+            mesh.rotation.set(0, 0, 0);
+            mesh.updateMatrix();
             scene.add(mesh);
 
-            camera.position.z = Math.max(2.5, 1.5 + aspectRatio);
+            // Set camera to a fixed starting position
+            camera.position.set(0, 0, Math.max(2.5, 1.5 + aspectRatio));
+            camera.lookAt(0, 0, 0);
         }
 
         function animate() {
@@ -650,26 +658,28 @@
         function onResults(face) {
             if (!face || !mesh) return;
             
-            const centerX = face.topLeft[0] / 160;
-            const centerY = face.topLeft[1] / 120;
+            // Calculate face center instead of using top-left
+            const faceX = (face.topLeft[0] + face.bottomRight[0]) / 2;
+            const faceY = (face.topLeft[1] + face.bottomRight[1]) / 2;
+            const centerX = faceX / 160;
+            const centerY = faceY / 120;
             
             // Calculate face size for Z movement
             const faceWidth = face.bottomRight[0] - face.topLeft[0];
             const faceHeight = face.bottomRight[1] - face.topLeft[1];
-            const faceSize = (faceWidth * faceHeight) / (160 * 120); // Normalized face size
+            const faceSize = (faceWidth * faceHeight) / (160 * 120);
             
             // Calculate offsets with adjustable sensitivity and direction
             const direction = controls.invertCamera ? -1 : 1;
             const xOffset = direction * (centerX - 0.5) * controls.xSensitivity;
             const yOffset = direction * (centerY - 0.5) * controls.ySensitivity;
-            const zOffset = direction * (faceSize - 0.15) * controls.zSensitivity; // 0.15 is baseline face size
+            const zOffset = direction * (faceSize - 0.15) * controls.zSensitivity;
             
             // Calculate target camera position
             const targetX = initialCameraPosition.x + xOffset;
             const targetY = initialCameraPosition.y + yOffset;
             const targetZ = controls.cameraDistance + zOffset;
             
-            // Smooth camera movement with adjustable lerp
             camera.position.x += (targetX - camera.position.x) * controls.smoothing;
             camera.position.y += (targetY - camera.position.y) * controls.smoothing;
             camera.position.z += (targetZ - camera.position.z) * controls.smoothing;
