@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>3D Photo Viewer</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.7.4/dist/tf.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@1.0.0"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <style>
         body { margin: 0; }
@@ -54,40 +53,45 @@
         let mesh;
         let model;
 
-        class DepthEstimator {
+        const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
+
+        class Pydnet {
             async init() {
-                // Load MobileNet for feature extraction
-                this.baseModel = await mobilenet.load();
+                const MODEL = "https://raw.githubusercontent.com/FilippoAleotti/demo_live/master/assets/js/pydnet.json";
+                this.model = await tf.loadGraphModel(MODEL);
                 this.height = 384;
                 this.width = 640;
                 return this;
             }
 
             async predict(img) {
-                const tensor = tf.browser.fromPixels(img);
-                const resized = tf.image.resizeBilinear(tensor, [this.height, this.width]);
-                const normalized = resized.div(255.0);
-                
-                // Get features from MobileNet
-                const features = this.baseModel.infer(normalized, true);
-                
-                // Simple depth estimation using feature activation
-                const depth = tf.tidy(() => {
-                    const activation = features.mean(-1);
-                    const normalized = activation.sub(activation.min())
-                                              .div(activation.max().sub(activation.min()))
-                                              .mul(255);
-                    return normalized.expandDims(-1);
+                const [data, resizeInputData] = tf.tidy(() => {
+                    var raw_input = tf.browser.fromPixels(img);
+                    var upsampledraw_input = tf.image.resizeBilinear(raw_input, [this.height, this.width]);
+                    var preprocessedInput = upsampledraw_input.expandDims();
+                    preprocessedInput = tf.div(preprocessedInput, 255.0);
+                    var result = this.model.predict(preprocessedInput);
+                    result = this.prepareOutput(result, img.width, img.height);
+                    upsampledraw_input = tf.cast(upsampledraw_input, "int32");
+                    const data = result.dataSync();
+                    const resizeInputData = upsampledraw_input.dataSync();
+                    return [data, resizeInputData];
                 });
+                await tf.nextFrame();
+                return [data, resizeInputData];
+            }
 
-                const depthData = await depth.data();
-                tensor.dispose();
-                resized.dispose();
-                normalized.dispose();
-                features.dispose();
-                depth.dispose();
-
-                return [Array.from(depthData)];
+            prepareOutput(tensor, width, height) {
+                return tf.tidy(() => {
+                    tensor = tf.relu(tensor);
+                    tensor = tf.squeeze(tensor);
+                    var min_value = tf.min(tensor);
+                    var max_value = tf.max(tensor);
+                    tensor = tf.div(tf.sub(tensor, min_value), tf.sub(max_value, min_value));
+                    tensor = tf.mul(tensor, 255.0);
+                    tensor = tf.cast(tensor, "int32");
+                    return tensor;
+                });
             }
         }
 
@@ -110,6 +114,51 @@
             animate();
         }
 
+        async function processImageElement(imageElement) {
+            try {
+                // Generate depth map
+                const [depthData, resizeInputData] = await model.predict(imageElement);
+                
+                // Create depth map image
+                const tempCanvas = document.getElementById('tempCanvas');
+                const previewCanvas = document.getElementById('previewCanvas');
+                tempCanvas.width = model.width;
+                tempCanvas.height = model.height;
+                previewCanvas.width = 200;
+                previewCanvas.height = 200;
+
+                // Draw depth map on temp canvas
+                const ctx = tempCanvas.getContext('2d');
+                const imageData = ctx.createImageData(model.width, model.height);
+                
+                let i = 0;
+                for (let y = 0; y < model.height; y++) {
+                    for (let x = 0; x < model.width; x++) {
+                        const index = y * model.width + x;
+                        const depth = depthData[index];
+                        imageData.data[i] = depth;
+                        imageData.data[i + 1] = depth;
+                        imageData.data[i + 2] = depth;
+                        imageData.data[i + 3] = 255;
+                        i += 4;
+                    }
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
+
+                // Draw preview
+                const previewCtx = previewCanvas.getContext('2d');
+                previewCtx.drawImage(tempCanvas, 0, 0, previewCanvas.width, previewCanvas.height);
+
+                // Create 3D visualization
+                createDisplacementMesh(imageElement, tempCanvas);
+                return true;
+            } catch (error) {
+                console.error('Error processing image:', error);
+                throw error;
+            }
+        }
+
         async function processImage() {
             const fileInput = document.getElementById('imageInput');
             const statusDiv = document.getElementById('status');
@@ -123,51 +172,24 @@
 
             const img = new Image();
             img.onload = async function() {
-                // Generate depth map
-                const [depthData] = await model.predict(img);
-                
-                // Create depth map image
-                const tempCanvas = document.getElementById('tempCanvas');
-                const previewCanvas = document.getElementById('previewCanvas');
-                tempCanvas.width = model.width;
-                tempCanvas.height = model.height;
-                previewCanvas.width = 200;
-                previewCanvas.height = 150;
-
-                // Draw depth map on temp canvas
-                const ctx = tempCanvas.getContext('2d');
-                const imageData = ctx.createImageData(model.width, model.height);
-                for (let i = 0; i < depthData.length; i++) {
-                    const idx = i * 4;
-                    imageData.data[idx] = depthData[i];
-                    imageData.data[idx + 1] = depthData[i];
-                    imageData.data[idx + 2] = depthData[i];
-                    imageData.data[idx + 3] = 255;
+                try {
+                    await processImageElement(img);
+                    statusDiv.textContent = 'Processing complete!';
+                } catch (error) {
+                    statusDiv.textContent = 'Error processing image: ' + error.message;
                 }
-                ctx.putImageData(imageData, 0, 0);
-
-                // Draw preview
-                const previewCtx = previewCanvas.getContext('2d');
-                previewCtx.drawImage(tempCanvas, 0, 0, 200, 150);
-
-                // Create 3D visualization
-                createDisplacementMesh(img, tempCanvas);
-                statusDiv.textContent = 'Processing complete!';
             };
             
             img.src = URL.createObjectURL(fileInput.files[0]);
         }
 
         function createDisplacementMesh(imageElement, depthCanvas) {
-            // Create texture from original image
             const texture = new THREE.Texture(imageElement);
             texture.needsUpdate = true;
 
-            // Create depth map texture
             const depthTexture = new THREE.Texture(depthCanvas);
             depthTexture.needsUpdate = true;
 
-            // Remove existing mesh if it exists
             if (mesh) {
                 scene.remove(mesh);
             }
@@ -177,13 +199,13 @@
                 map: texture,
                 displacementMap: depthTexture,
                 displacementScale: 0.5,
-                side: THREE.DoubleSide
+                side: THREE.DoubleSide,
+                flatShading: true
             });
 
             mesh = new THREE.Mesh(geometry, material);
             scene.add(mesh);
 
-            // Reset camera position
             camera.position.z = 5;
         }
 
@@ -200,8 +222,16 @@
 
         // Initialize depth estimation model
         async function setupModel() {
-            model = await new DepthEstimator().init();
-            document.getElementById('status').textContent = 'Ready to process images';
+            const statusDiv = document.getElementById('status');
+            try {
+                statusDiv.textContent = 'Loading model...';
+                model = await new Pydnet().init();
+                statusDiv.textContent = 'Model loaded, loading default image...';
+                await loadDefaultImage();
+            } catch (error) {
+                console.error('Error setting up model:', error);
+                statusDiv.textContent = 'Error loading model: ' + error.message;
+            }
         }
         setupModel();
 
@@ -240,6 +270,121 @@
         document.addEventListener('mouseup', () => {
             isDragging = false;
         });
+
+        async function loadDefaultImage() {
+            const statusDiv = document.getElementById('status');
+            statusDiv.textContent = 'Loading default image...';
+
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            
+            img.onerror = () => {
+                statusDiv.textContent = 'Failed to load default image';
+            };
+
+            img.onload = async function() {
+                try {
+                    await processImageElement(img);
+                    statusDiv.textContent = 'Default image loaded and processed!';
+                } catch (error) {
+                    console.error('Error processing default image:', error);
+                    statusDiv.textContent = 'Error processing default image';
+                }
+            };
+            
+            // Set default image source
+            img.src = 'temp.jpeg';
+        }
+
+        async function predict(model, image) {
+            // Convert image to tensor and normalize
+            const tensor = tf.browser.fromPixels(image)
+                .resizeBilinear([384, 384]) // MiDaS model expects 384x384 input
+                .expandDims(0)
+                .toFloat()
+                .div(255.0);
+
+            // Run prediction
+            try {
+                const prediction = await model.predict(tensor);
+                
+                // Ensure proper axis handling (this is where the error was occurring)
+                const depthMap = prediction.squeeze(); // Remove batch dimension
+                
+                // Normalize depth values to 0-1 range
+                const normalizedDepth = depthMap.sub(depthMap.min())
+                                                .div(depthMap.max().sub(depthMap.min()));
+                
+                // Convert to image data
+                const depthArray = await normalizedDepth.data();
+                const width = depthMap.shape[1];
+                const height = depthMap.shape[0];
+                
+                // Create canvas for depth map
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                const imageData = ctx.createImageData(width, height);
+                
+                // Fill image data with depth values
+                for (let i = 0; i < depthArray.length; i++) {
+                    const value = Math.floor(depthArray[i] * 255);
+                    imageData.data[i * 4] = value;     // R
+                    imageData.data[i * 4 + 1] = value; // G
+                    imageData.data[i * 4 + 2] = value; // B
+                    imageData.data[i * 4 + 3] = 255;   // A
+                }
+                
+                ctx.putImageData(imageData, 0, 0);
+                
+                // Clean up tensors
+                tensor.dispose();
+                prediction.dispose();
+                depthMap.dispose();
+                normalizedDepth.dispose();
+                
+                return canvas;
+            } catch (error) {
+                console.error('Error in depth estimation:', error);
+                throw error;
+            }
+        }
+
+        async function processImage(imageElement) {
+            try {
+                const model = await tf.loadGraphModel('path/to/your/model.json');
+                const depthMap = await predict(model, imageElement);
+                
+                // Update the depth map preview
+                const previewContainer = document.querySelector('.depth-map-preview');
+                if (previewContainer) {
+                    previewContainer.innerHTML = '';
+                    previewContainer.appendChild(depthMap);
+                }
+                
+                // Use the depth map for Three.js visualization
+                updateThreeJsScene(imageElement, depthMap);
+            } catch (error) {
+                console.error('Processing failed:', error);
+            }
+        }
+
+        function updateThreeJsScene(originalImage, depthMap) {
+            // Create texture from depth map
+            const depthTexture = new THREE.CanvasTexture(depthMap);
+            
+            // Create displacement material
+            const material = new THREE.MeshStandardMaterial({
+                map: new THREE.TextureLoader().load(originalImage.src),
+                displacementMap: depthTexture,
+                displacementScale: 50, // Adjust this value to control depth effect
+                displacementBias: 0
+            });
+
+            // Update your mesh with the new material
+            // ... rest of your Three.js code
+        }
     </script>
 </body>
 </html> 

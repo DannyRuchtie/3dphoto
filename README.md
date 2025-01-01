@@ -1,15 +1,26 @@
 # 3D Photo Viewer with Depth Estimation
 
-A pure client-side web application that converts regular 2D images into interactive 3D visualizations using AI-powered depth estimation. The application uses TensorFlow.js and Three.js to create an immersive viewing experience from standard photographs, all running directly in your browser.
+A browser-based application that creates interactive 3D visualizations from 2D images using AI-powered depth estimation. The application runs entirely in your browser, using TensorFlow.js for depth estimation and Three.js for 3D rendering.
 
 ## Features
 
-- Upload any 2D image and convert it to a 3D visualization
+- Browser-based 3D conversion (no server uploads needed)
 - Real-time depth map generation using TensorFlow.js and MobileNet
-- Interactive 3D viewing with mouse controls for rotation
+- Interactive 3D model with mouse controls:
+  - Click and drag to rotate the model
+  - Automatic rotation when not interacting
 - Live depth map preview
-- Responsive design for both desktop and mobile devices
-- Completely client-side (no server required)
+- Responsive design that adapts to your screen size
+- WebGL-powered 3D rendering
+
+## Technical Details
+
+The application uses:
+- **TensorFlow.js** (v1.7.4) for AI-powered depth estimation
+- **MobileNet** (v1.0.0) for feature extraction
+- **Three.js** (r128) for 3D rendering
+- Pure client-side JavaScript implementation
+- WebGL for hardware-accelerated graphics
 
 ## Running the Application
 
