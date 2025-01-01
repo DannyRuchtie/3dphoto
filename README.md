@@ -2,7 +2,7 @@
 
 A web-based application that converts 2D images into interactive 3D views controlled by face movements. This project combines depth estimation, face tracking, and 3D rendering to create an immersive viewing experience.
 
-![Application Interface](/images/screen-1.pngg)
+![Application Interface](/images/screen-1.png)
 
 ## Features
 
