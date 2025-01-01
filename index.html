@@ -106,7 +106,7 @@
             padding: 20px;
             border-radius: 8px;
             width: 200px;
-            height: 115px;
+            height: fit-content;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -177,9 +177,9 @@
             cameraDistance: 2,
             invertCamera: true,
             showUI: true,
-            depthStrength: 0.4,
+            depthStrength: 0.14,
             selectedImage: 'images/example-1.jpeg',
-            imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg'],
+            imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg',  'images/exemple-4.jpeg']  ,
             loadImage: function() {
                 loadSelectedImage();
             }
@@ -269,7 +269,12 @@
         async function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer = new THREE.WebGLRenderer({ 
+                antialias: true,
+                alpha: true,
+                premultipliedAlpha: true
+            });
+            renderer.setPixelRatio(window.devicePixelRatio);
             renderer.setSize(window.innerWidth, window.innerHeight);
             renderer.domElement.classList.add('webgl');
             document.body.appendChild(renderer.domElement);
@@ -404,18 +409,34 @@
                     vec4 color = texture2D(map, uv);
                     
                     // Simple rectangle with rounded corners
-                    float cornerRadius = 0.02;  // Adjust this for more/less rounding
-                    vec2 halfSize = vec2(0.5);
+                    float cornerRadius = 0.02;
+                    vec2 halfSize = vec2(0.48);
                     vec2 edgeDistance = abs(vUv - 0.5);
+                    
+                    // Improved anti-aliasing for edges
+                    float aa = fwidth(edgeDistance.x + edgeDistance.y) * 2.0;
                     
                     if (max(edgeDistance.x - (halfSize.x - cornerRadius), 
                            edgeDistance.y - (halfSize.y - cornerRadius)) > 0.0) {
                         // Check if we're outside the rounded rectangle
                         vec2 cornerEdgeDistance = max(edgeDistance - halfSize + cornerRadius, 0.0);
-                        if (length(cornerEdgeDistance) > cornerRadius) {
+                        float dist = length(cornerEdgeDistance);
+                        // Smooth transition at edges
+                        float alpha = 1.0 - smoothstep(cornerRadius - aa, cornerRadius + aa, dist);
+                        if (alpha <= 0.0) {
                             discard;
                         }
+                        color.a *= alpha;
                     }
+                    
+                    // Add subtle edge softening
+                    float edgeSoftness = 0.01;
+                    float edgeAlpha = 1.0 - smoothstep(
+                        halfSize.x - edgeSoftness,
+                        halfSize.x,
+                        max(abs(vUv.x - 0.5), abs(vUv.y - 0.5))
+                    );
+                    color.a *= edgeAlpha;
                     
                     gl_FragColor = color;
                 }
@@ -430,8 +451,8 @@
             const geometry = new THREE.PlaneGeometry(
                 width, 
                 height, 
-                Math.min(512, Math.round(512 * aspectRatio)),
-                Math.min(512, Math.round(512 / aspectRatio))
+                Math.min(1024, Math.round(1024 * aspectRatio)),
+                Math.min(1024, Math.round(1024 / aspectRatio))
             );
 
             const material = new THREE.ShaderMaterial({
@@ -653,7 +674,7 @@
             // Calculate offsets with adjustable sensitivity and direction
             const direction = controls.invertCamera ? -1 : 1;
             const xOffset = direction * (centerX - 0.5) * controls.xSensitivity;
-            const yOffset = -direction * (centerY - 0.5) * controls.ySensitivity;
+            const yOffset = direction * (centerY - 0.5) * controls.ySensitivity;
             
             // Calculate target camera position
             const targetX = initialCameraPosition.x + xOffset;
