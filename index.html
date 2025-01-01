@@ -59,38 +59,72 @@
             async init() {
                 const MODEL = "https://raw.githubusercontent.com/FilippoAleotti/demo_live/master/assets/js/pydnet.json";
                 this.model = await tf.loadGraphModel(MODEL);
-                this.height = 384;
-                this.width = 640;
+                this.inputHeight = 384;
+                this.inputWidth = 640;
+                this.outputHeight = 768;
+                this.outputWidth = 1280;
                 return this;
             }
 
             async predict(img) {
                 const [data, resizeInputData] = tf.tidy(() => {
-                    var raw_input = tf.browser.fromPixels(img);
-                    var upsampledraw_input = tf.image.resizeBilinear(raw_input, [this.height, this.width]);
-                    var preprocessedInput = upsampledraw_input.expandDims();
-                    preprocessedInput = tf.div(preprocessedInput, 255.0);
-                    var result = this.model.predict(preprocessedInput);
-                    result = this.prepareOutput(result, img.width, img.height);
-                    upsampledraw_input = tf.cast(upsampledraw_input, "int32");
-                    const data = result.dataSync();
-                    const resizeInputData = upsampledraw_input.dataSync();
+                    // Initial image processing
+                    const raw_input = tf.browser.fromPixels(img);
+                    const modelInput = tf.image.resizeBilinear(raw_input, [this.inputHeight, this.inputWidth]);
+                    const preprocessedInput = modelInput.expandDims();
+                    const normalizedInput = tf.div(preprocessedInput, 255.0);
+                    
+                    // Get model prediction
+                    const result = this.model.predict(normalizedInput);
+                    
+                    // Process the result while maintaining tensor dimensions
+                    let processedResult = this.prepareOutput(result);
+                    
+                    // Resize the processed result
+                    const resizedResult = tf.image.resizeBilinear(
+                        processedResult.expandDims(2),  // Add channel dimension back
+                        [this.outputHeight, this.outputWidth]
+                    );
+                    
+                    // Process input for visualization
+                    const finalInput = tf.image.resizeBilinear(raw_input, [this.outputHeight, this.outputWidth]);
+                    const finalInputInt = tf.cast(finalInput, "int32");
+                    
+                    const data = resizedResult.squeeze().dataSync();
+                    const resizeInputData = finalInputInt.dataSync();
                     return [data, resizeInputData];
                 });
                 await tf.nextFrame();
                 return [data, resizeInputData];
             }
 
-            prepareOutput(tensor, width, height) {
+            prepareOutput(tensor) {
                 return tf.tidy(() => {
                     tensor = tf.relu(tensor);
                     tensor = tf.squeeze(tensor);
-                    var min_value = tf.min(tensor);
-                    var max_value = tf.max(tensor);
-                    tensor = tf.div(tf.sub(tensor, min_value), tf.sub(max_value, min_value));
-                    tensor = tf.mul(tensor, 255.0);
-                    tensor = tf.cast(tensor, "int32");
-                    return tensor;
+                    tensor = tf.expandDims(tensor, 2);  // Add channel dimension for conv2d
+                    const gaussianKernel = tf.tensor2d(
+                        [
+                            [1, 2, 1],
+                            [2, 4, 2],
+                            [1, 2, 1]
+                        ]
+                    ).div(16).expandDims(2).expandDims(3);
+                    
+                    tensor = tf.conv2d(
+                        tensor.expandDims(0),
+                        gaussianKernel,
+                        1,
+                        'same'
+                    ).squeeze();
+
+                    const min_value = tf.min(tensor);
+                    const max_value = tf.max(tensor);
+                    const normalized = tf.div(
+                        tf.sub(tensor, min_value),
+                        tf.sub(max_value, min_value)
+                    );
+                    return tf.mul(normalized, 255.0);
                 });
             }
         }
@@ -122,19 +156,19 @@
                 // Create depth map image
                 const tempCanvas = document.getElementById('tempCanvas');
                 const previewCanvas = document.getElementById('previewCanvas');
-                tempCanvas.width = model.width;
-                tempCanvas.height = model.height;
+                tempCanvas.width = model.outputWidth;
+                tempCanvas.height = model.outputHeight;
                 previewCanvas.width = 200;
                 previewCanvas.height = 200;
 
                 // Draw depth map on temp canvas
                 const ctx = tempCanvas.getContext('2d');
-                const imageData = ctx.createImageData(model.width, model.height);
+                const imageData = ctx.createImageData(model.outputWidth, model.outputHeight);
                 
                 let i = 0;
-                for (let y = 0; y < model.height; y++) {
-                    for (let x = 0; x < model.width; x++) {
-                        const index = y * model.width + x;
+                for (let y = 0; y < model.outputHeight; y++) {
+                    for (let x = 0; x < model.outputWidth; x++) {
+                        const index = y * model.outputWidth + x;
                         const depth = depthData[index];
                         imageData.data[i] = depth;
                         imageData.data[i + 1] = depth;
@@ -188,25 +222,29 @@
             texture.needsUpdate = true;
 
             const depthTexture = new THREE.Texture(depthCanvas);
+            depthTexture.minFilter = THREE.LinearFilter;
+            depthTexture.magFilter = THREE.LinearFilter;
             depthTexture.needsUpdate = true;
 
             if (mesh) {
                 scene.remove(mesh);
             }
 
-            const geometry = new THREE.PlaneGeometry(3, 3, 128, 128);
+            const geometry = new THREE.PlaneGeometry(3, 3, 512, 512);
             const material = new THREE.MeshPhongMaterial({
                 map: texture,
                 displacementMap: depthTexture,
-                displacementScale: 0.5,
+                displacementScale: 0.3,  // Reduce displacement effect
+                displacementBias: -0.15,  // Adjust the base depth level
                 side: THREE.DoubleSide,
-                flatShading: true
+                flatShading: false,  // Remove flat shading for smoother look
+                shininess: 0  // Reduce specular highlights
             });
 
             mesh = new THREE.Mesh(geometry, material);
             scene.add(mesh);
 
-            camera.position.z = 5;
+            camera.position.z = 5;  // Move camera closer for subtler perspective
         }
 
         function animate() {
@@ -293,7 +331,7 @@
             };
             
             // Set default image source
-            img.src = 'temp.jpeg';
+            img.src = 'temp2.jpg';
         }
 
         async function predict(model, image) {
