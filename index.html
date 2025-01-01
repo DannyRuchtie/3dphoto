@@ -170,7 +170,7 @@
             ySensitivity: 1.0,
             smoothing: 0.1,
             selectedImage: 'images/example-1.jpeg',
-            imageOptions: ['images/example-2.jpeg', 'images/example-3.jpeg', 'images/example-4.jpeg', 'images/example-5.jpeg', 'images/example-6.jpeg'],
+            imageOptions: ['images/example-2.jpeg', 'images/example-3.jpeg', 'images/example-4.jpeg', 'images/example-5.jpeg'],
             loadImage: function() {
                 loadSelectedImage();
             }
@@ -459,35 +459,6 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
         });
 
-        // Add mouse controls for rotation
-        let isDragging = false;
-        let previousMousePosition = { x: 0, y: 0 };
-
-        document.addEventListener('mousedown', (e) => {
-            isDragging = true;
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (isDragging && mesh) {
-                const deltaMove = {
-                    x: e.offsetX - previousMousePosition.x,
-                    y: e.offsetY - previousMousePosition.y
-                };
-
-                mesh.rotation.y += deltaMove.x * 0.01;
-                mesh.rotation.x += deltaMove.y * 0.01;
-            }
-
-            previousMousePosition = {
-                x: e.offsetX,
-                y: e.offsetY
-            };
-        });
-
-        document.addEventListener('mouseup', () => {
-            isDragging = false;
-        });
-
         async function loadDefaultImage() {
             await loadSelectedImage();
         }
@@ -657,8 +628,8 @@
             const centerY = face.topLeft[1] / 120;
             
             // Calculate offsets with adjustable sensitivity
-            const xOffset = (0.5 - centerX) * controls.xSensitivity;
-            const yOffset = (0.5 - centerY) * controls.ySensitivity;
+            const xOffset = (centerX - 0.5) * controls.xSensitivity;
+            const yOffset = (centerY - 0.5) * controls.ySensitivity;
             
             // Calculate target camera position
             const targetX = initialCameraPosition.x + xOffset;
