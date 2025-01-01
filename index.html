@@ -59,50 +59,55 @@
             async init() {
                 const MODEL = "https://raw.githubusercontent.com/FilippoAleotti/demo_live/master/assets/js/pydnet.json";
                 this.model = await tf.loadGraphModel(MODEL);
-                this.inputHeight = 384;
-                this.inputWidth = 640;
-                this.outputHeight = 768;
-                this.outputWidth = 1280;
+                this.modelHeight = 384;
+                this.modelWidth = 640;
                 return this;
             }
 
             async predict(img) {
+                const aspectRatio = img.width / img.height;
+                let outputWidth, outputHeight;
+                
+                if (aspectRatio > 1) {
+                    outputWidth = 1920;
+                    outputHeight = Math.round(1920 / aspectRatio);
+                } else {
+                    outputHeight = 1920;
+                    outputWidth = Math.round(1920 * aspectRatio);
+                }
+
                 const [data, resizeInputData] = tf.tidy(() => {
-                    // Initial image processing
                     const raw_input = tf.browser.fromPixels(img);
-                    const modelInput = tf.image.resizeBilinear(raw_input, [this.inputHeight, this.inputWidth]);
+                    
+                    const modelInput = tf.image.resizeBilinear(raw_input, [this.modelHeight, this.modelWidth]);
                     const preprocessedInput = modelInput.expandDims();
                     const normalizedInput = tf.div(preprocessedInput, 255.0);
                     
-                    // Get model prediction
                     const result = this.model.predict(normalizedInput);
-                    
-                    // Process the result while maintaining tensor dimensions
                     let processedResult = this.prepareOutput(result);
                     
-                    // Resize the processed result
                     const resizedResult = tf.image.resizeBilinear(
-                        processedResult.expandDims(2),  // Add channel dimension back
-                        [this.outputHeight, this.outputWidth]
+                        processedResult.expandDims(2),
+                        [outputHeight, outputWidth],
+                        true
                     );
                     
-                    // Process input for visualization
-                    const finalInput = tf.image.resizeBilinear(raw_input, [this.outputHeight, this.outputWidth]);
+                    const finalInput = tf.image.resizeBilinear(raw_input, [outputHeight, outputWidth]);
                     const finalInputInt = tf.cast(finalInput, "int32");
                     
                     const data = resizedResult.squeeze().dataSync();
                     const resizeInputData = finalInputInt.dataSync();
-                    return [data, resizeInputData];
+                    return [data, resizeInputData, outputWidth, outputHeight];
                 });
                 await tf.nextFrame();
-                return [data, resizeInputData];
+                return [data, resizeInputData, outputWidth, outputHeight];
             }
 
             prepareOutput(tensor) {
                 return tf.tidy(() => {
                     tensor = tf.relu(tensor);
                     tensor = tf.squeeze(tensor);
-                    tensor = tf.expandDims(tensor, 2);  // Add channel dimension for conv2d
+                    tensor = tf.expandDims(tensor, 2);
                     const gaussianKernel = tf.tensor2d(
                         [
                             [1, 2, 1],
@@ -150,25 +155,22 @@
 
         async function processImageElement(imageElement) {
             try {
-                // Generate depth map
-                const [depthData, resizeInputData] = await model.predict(imageElement);
+                const [depthData, resizeInputData, width, height] = await model.predict(imageElement);
                 
-                // Create depth map image
                 const tempCanvas = document.getElementById('tempCanvas');
                 const previewCanvas = document.getElementById('previewCanvas');
-                tempCanvas.width = model.outputWidth;
-                tempCanvas.height = model.outputHeight;
+                tempCanvas.width = width;
+                tempCanvas.height = height;
                 previewCanvas.width = 200;
-                previewCanvas.height = 200;
+                previewCanvas.height = Math.round(200 * (height / width));
 
-                // Draw depth map on temp canvas
                 const ctx = tempCanvas.getContext('2d');
-                const imageData = ctx.createImageData(model.outputWidth, model.outputHeight);
+                const imageData = ctx.createImageData(width, height);
                 
                 let i = 0;
-                for (let y = 0; y < model.outputHeight; y++) {
-                    for (let x = 0; x < model.outputWidth; x++) {
-                        const index = y * model.outputWidth + x;
+                for (let y = 0; y < height; y++) {
+                    for (let x = 0; x < width; x++) {
+                        const index = y * width + x;
                         const depth = depthData[index];
                         imageData.data[i] = depth;
                         imageData.data[i + 1] = depth;
@@ -180,12 +182,10 @@
                 
                 ctx.putImageData(imageData, 0, 0);
 
-                // Draw preview
                 const previewCtx = previewCanvas.getContext('2d');
                 previewCtx.drawImage(tempCanvas, 0, 0, previewCanvas.width, previewCanvas.height);
 
-                // Create 3D visualization
-                createDisplacementMesh(imageElement, tempCanvas);
+                createDisplacementMesh(imageElement, tempCanvas, width / height);
                 return true;
             } catch (error) {
                 console.error('Error processing image:', error);
@@ -217,7 +217,7 @@
             img.src = URL.createObjectURL(fileInput.files[0]);
         }
 
-        function createDisplacementMesh(imageElement, depthCanvas) {
+        function createDisplacementMesh(imageElement, depthCanvas, aspectRatio) {
             const texture = new THREE.Texture(imageElement);
             texture.needsUpdate = true;
 
@@ -230,21 +230,30 @@
                 scene.remove(mesh);
             }
 
-            const geometry = new THREE.PlaneGeometry(3, 3, 512, 512);
+            const width = 3;
+            const height = width / aspectRatio;
+            const geometry = new THREE.PlaneGeometry(
+                width, 
+                height, 
+                Math.min(512, Math.round(512 * aspectRatio)),
+                Math.min(512, Math.round(512 / aspectRatio))
+            );
             const material = new THREE.MeshPhongMaterial({
                 map: texture,
                 displacementMap: depthTexture,
-                displacementScale: 0.3,  // Reduce displacement effect
-                displacementBias: -0.15,  // Adjust the base depth level
+                displacementScale: 0.2,
+                displacementBias: -0.15,
                 side: THREE.DoubleSide,
-                flatShading: false,  // Remove flat shading for smoother look
-                shininess: 0  // Reduce specular highlights
+                flatShading: false,
+                roughness: 0.5,
+                metalness: 0.1,
+                shininess: 0
             });
 
             mesh = new THREE.Mesh(geometry, material);
             scene.add(mesh);
 
-            camera.position.z = 5;  // Move camera closer for subtler perspective
+            camera.position.z = Math.max(4, 3 + 2 * aspectRatio);
         }
 
         function animate() {
