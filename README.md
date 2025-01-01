@@ -2,7 +2,7 @@
 
 A web-based application that converts 2D images into interactive 3D views controlled by face movements. This project combines depth estimation, face tracking, and 3D rendering to create an immersive viewing experience.
 
-![Application Interface](@Screenshot 2025-01-01 at 5.56.32 PM.png)
+![Application Interface](/images/screen-1.pngg)
 
 ## Features
 
@@ -29,7 +29,7 @@ A web-based application that converts 2D images into interactive 3D views contro
    - Applies depth maps as displacement maps on 3D meshes
    - Uses custom shaders for rounded corners and edge effects
 
-![Depth Map Preview](@Screenshot 2025-01-01 at 5.57.22 PM)
+![Depth Map Preview](/images/screen-2.png)
 
 ## Controls
 
@@ -76,10 +76,10 @@ A web-based application that converts 2D images into interactive 3D views contro
 4. Adjust controls as needed for optimal experience
 
 ## Image Credits
+Danny Ruchtie abd Unsplash
 
 Sample images provided by [Unsplash](https://unsplash.com)
 - Example images used under the Unsplash License
-- Visit individual image URLs for photographer credits
 
 ## Browser Support
 
