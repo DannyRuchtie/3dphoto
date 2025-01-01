@@ -141,7 +141,7 @@
             renderer.setSize(window.innerWidth, window.innerHeight);
             document.body.appendChild(renderer.domElement);
 
-            camera.position.z = 5;
+            camera.position.z = 2.5;
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
@@ -241,7 +241,7 @@
             const material = new THREE.MeshPhongMaterial({
                 map: texture,
                 displacementMap: depthTexture,
-                displacementScale: 0.2,
+                displacementScale: 0.15,
                 displacementBias: -0.15,
                 side: THREE.DoubleSide,
                 flatShading: false,
@@ -253,7 +253,7 @@
             mesh = new THREE.Mesh(geometry, material);
             scene.add(mesh);
 
-            camera.position.z = Math.max(4, 3 + 2 * aspectRatio);
+            camera.position.z = Math.max(2.5, 1.5 + aspectRatio);
         }
 
         function animate() {
