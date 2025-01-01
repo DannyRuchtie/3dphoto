@@ -143,7 +143,7 @@
 <body>
     <div id="upload-container">
         <input type="file" id="imageInput" accept="image/*">
-        <button onclick="processImage()">Process & View in 3D</button>
+        <button onclick="processImage()" disabled>Process & View in 3D</button>
         <div id="status"></div>
     </div>
     <canvas id="tempCanvas"></canvas>
@@ -164,13 +164,13 @@
         let webcam;
         let initialCameraPosition = { x: 0, y: 0, z: 2.5 };
         let controls = {
-            xSensitivity: 1.0,
-            ySensitivity: 1.0,
+            xSensitivity: 2.0,
+            ySensitivity: 2.0,
             smoothing: 0.1,
             cameraDistance: 2,
-            invertCamera: false,
+            invertCamera: true,
             selectedImage: 'images/example-1.jpeg',
-            imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg', 'images/example-4.jpeg', 'images/example-5.jpeg'],
+            imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg'],
             loadImage: function() {
                 loadSelectedImage();
             }
@@ -330,19 +330,30 @@
                 return;
             }
 
-            statusDiv.textContent = 'Processing image...';
-
-            const img = new Image();
-            img.onload = async function() {
-                try {
-                    await processImageElement(img);
-                    statusDiv.textContent = 'Processing complete!';
-                } catch (error) {
-                    statusDiv.textContent = 'Error processing image: ' + error.message;
-                }
-            };
-            
-            img.src = URL.createObjectURL(fileInput.files[0]);
+            try {
+                // Create a temporary URL for the uploaded file
+                const fileUrl = URL.createObjectURL(fileInput.files[0]);
+                
+                const img = new Image();
+                img.crossOrigin = "Anonymous";
+                
+                img.onload = async function() {
+                    try {
+                        await processImageElement(img);
+                        statusDiv.textContent = 'Image loaded and processed!';
+                    } catch (error) {
+                        console.error('Error processing image:', error);
+                        statusDiv.textContent = 'Error processing image';
+                    }
+                    // Clean up the temporary URL after processing
+                    URL.revokeObjectURL(fileUrl);
+                };
+                img.src = fileUrl;
+                
+            } catch (error) {
+                console.error('Image loading error:', error);
+                statusDiv.textContent = 'Error loading image. Please try again.';
+            }
         }
 
         function createDisplacementMesh(imageElement, depthCanvas, aspectRatio) {
@@ -444,6 +455,8 @@
                 statusDiv.textContent = 'Loading model...';
                 model = await new Pydnet().init();
                 statusDiv.textContent = 'Model loaded, loading default image...';
+                // Enable the process button once model is loaded
+                document.querySelector('#upload-container button').disabled = false;
                 await loadDefaultImage();
             } catch (error) {
                 console.error('Error setting up model:', error);
@@ -628,7 +641,7 @@
             // Calculate offsets with adjustable sensitivity and direction
             const direction = controls.invertCamera ? -1 : 1;
             const xOffset = direction * (centerX - 0.5) * controls.xSensitivity;
-            const yOffset = direction * (centerY - 0.5) * controls.ySensitivity;
+            const yOffset = -direction * (centerY - 0.5) * controls.ySensitivity;
             
             // Calculate target camera position
             const targetX = initialCameraPosition.x + xOffset;
