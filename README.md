@@ -1,87 +1,119 @@
-# 3D Photo Viewer with Depth Estimation
+# 3D Photo Viewer with Face Tracking
 
-A browser-based application that creates interactive 3D visualizations from 2D images using AI-powered depth estimation. The application runs entirely in your browser, using TensorFlow.js for depth estimation and Three.js for 3D rendering.
+A web-based application that converts 2D images into interactive 3D views controlled by face movements. This project combines depth estimation, face tracking, and 3D rendering to create an immersive viewing experience.
+
+![Application Interface](@Screenshot 2025-01-01 at 5.56.32 PM.png)
 
 ## Features
 
-- Browser-based 3D conversion (no server uploads needed)
-- Real-time depth map generation using TensorFlow.js and MobileNet
-- Interactive 3D model with mouse controls:
-  - Click and drag to rotate the model
-  - Automatic rotation when not interacting
-- Live depth map preview
-- Responsive design that adapts to your screen size
-- WebGL-powered 3D rendering
+- **Real-time Face Tracking**: Uses your webcam to track face movements and control the camera view
+- **Depth Map Generation**: Converts 2D images into 3D using AI-powered depth estimation
+- **Interactive Controls**: Fine-tune the experience with an intuitive control panel
+- **Mobile-Ready**: Optimized for iOS web app installation with proper status bar handling
+- **Dark Theme**: Modern dark interface with blur effects and rounded corners
+
+## How It Works
+
+1. **Depth Estimation**
+   - Uses Pydnet (TensorFlow.js) to generate depth maps from 2D images
+   - Processes images in real-time with WebGL acceleration
+   - Visualizes depth information in a preview window
+
+2. **Face Tracking**
+   - Utilizes BlazeFace for real-time face detection
+   - Tracks face position through webcam feed
+   - Translates face movements into camera controls
+
+3. **3D Rendering**
+   - Employs Three.js for 3D scene management
+   - Applies depth maps as displacement maps on 3D meshes
+   - Uses custom shaders for rounded corners and edge effects
+
+![Depth Map Preview](@Screenshot 2025-01-01 at 5.57.22 PM)
+
+## Controls
+
+### Face Tracking Controls
+- **X Sensitivity**: Adjust horizontal movement sensitivity (0.1-3.0)
+- **Y Sensitivity**: Adjust vertical movement sensitivity (0.1-3.0)
+- **Smoothing**: Control camera movement smoothness (0.01-0.5)
+- **Camera Distance**: Adjust view distance (0.5-3.0)
+- **Invert Camera**: Toggle movement direction
+
+### Image Controls
+- **Select Image**: Choose from preset images
+- **Load Selected Image**: Apply selected image
+- **Upload Custom Image**: Process your own images
 
 ## Technical Details
 
-The application uses:
-- **TensorFlow.js** (v1.7.4) for AI-powered depth estimation
-- **MobileNet** (v1.0.0) for feature extraction
-- **Three.js** (r128) for 3D rendering
-- Pure client-side JavaScript implementation
-- WebGL for hardware-accelerated graphics
+### Technologies Used
+- **TensorFlow.js**: AI model execution in browser
+- **Three.js**: 3D graphics rendering
+- **BlazeFace**: Face detection and tracking
+- **WebGL**: Hardware-accelerated graphics
+- **dat.GUI**: Control interface
 
-## Running the Application
+### Performance Optimizations
+- Efficient shader-based rendering
+- Optimized face tracking loop
+- Smart texture management
+- Smooth camera interpolation
 
-You can run the website using any of these simple server methods:
+## Installation
 
-### 1. Using Python
+1. Clone the repository
+2. Host on a web server (required for webcam access)
+3. Access through a WebGL-enabled browser
 
-```bash
-# If you have Python 3:
-python -m http.server 8000
+## Usage
 
-# If you have Python 2:
-python -m SimpleHTTPServer 8000
-```
-Then visit: `http://localhost:8000`
+1. Allow webcam access when prompted
+2. Select an image from the preset options or upload your own
+3. Move your face to control the 3D view:
+   - Left/Right: Rotate horizontally
+   - Up/Down: Rotate vertically
+4. Adjust controls as needed for optimal experience
 
-### 2. Using Node.js
+## Image Credits
 
-First install a server package:
-```bash
-# Using npx (comes with Node.js)
-npx serve
+Sample images provided by [Unsplash](https://unsplash.com)
+- Example images used under the Unsplash License
+- Visit individual image URLs for photographer credits
 
-# Or using http-server
-npm install -g http-server
-http-server
-```
-Then visit the URL shown in the terminal (usually `http://localhost:8080`)
+## Browser Support
 
-### 3. Using PHP
+- Chrome (recommended)
+- Firefox
+- Safari
+- Edge (Chromium-based)
 
-```bash
-php -S localhost:8000
-```
+Requires:
+- WebGL support
+- WebRTC (for webcam)
+- Modern JavaScript features
 
-### 4. Using Visual Studio Code
+## Known Limitations
 
-Install the "Live Server" extension and right-click on `index.html` -> "Open with Live Server"
+- Requires good lighting for face tracking
+- Performance depends on device capabilities
+- Some browsers may limit webcam access
 
-## How to Use
+## Future Improvements
 
-1. Start any of the servers mentioned above
-2. Open your browser and navigate to the local server URL
-3. Click "Choose File" to select an image
-4. Click "Process & View in 3D" to generate the 3D visualization
-5. Use your mouse to interact with the 3D model:
-   - Click and drag to rotate
-   - The model will auto-rotate when not being manipulated
-
-## Limitations
-
-- Works best with images that have clear foreground/background separation
-- Processing time may vary depending on image size and device capabilities
-- Depth estimation is an approximation and may not be perfect for all images
+- Additional depth estimation models
+- More image effects and filters
+- Performance optimizations
+- Mobile gesture controls
+- Batch processing support
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+[Your chosen license]
 
 ## Acknowledgments
 
-- TensorFlow.js team for the machine learning capabilities
-- Three.js team for the 3D rendering engine
-- MobileNet contributors for the neural network architecture
+- TensorFlow.js team for the ML capabilities
+- Three.js community for 3D rendering
+- Unsplash for sample images
+- [Other acknowledgments]

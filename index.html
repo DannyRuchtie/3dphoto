@@ -138,6 +138,12 @@
                 padding-bottom: env(safe-area-inset-bottom);
             }
         }
+        .hide-ui #webcam-container,
+        .hide-ui #upload-container,
+        .hide-ui #depthPreview,
+        .hide-ui .dg.ac {
+            display: none !important;
+        }
     </style>
 </head>
 <body>
@@ -169,6 +175,7 @@
             smoothing: 0.1,
             cameraDistance: 2,
             invertCamera: true,
+            showUI: true,
             selectedImage: 'images/example-1.jpeg',
             imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg'],
             loadImage: function() {
@@ -330,30 +337,33 @@
                 return;
             }
 
-            try {
-                // Create a temporary URL for the uploaded file
-                const fileUrl = URL.createObjectURL(fileInput.files[0]);
-                
-                const img = new Image();
-                img.crossOrigin = "Anonymous";
-                
-                img.onload = async function() {
-                    try {
-                        await processImageElement(img);
-                        statusDiv.textContent = 'Image loaded and processed!';
-                    } catch (error) {
-                        console.error('Error processing image:', error);
-                        statusDiv.textContent = 'Error processing image';
-                    }
-                    // Clean up the temporary URL after processing
-                    URL.revokeObjectURL(fileUrl);
-                };
-                img.src = fileUrl;
-                
-            } catch (error) {
-                console.error('Image loading error:', error);
-                statusDiv.textContent = 'Error loading image. Please try again.';
-            }
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            
+            img.onload = async function() {
+                try {
+                    await processImageElement(img);
+                    statusDiv.textContent = 'Image loaded and processed!';
+                } catch (error) {
+                    console.error('Error processing image:', error);
+                    statusDiv.textContent = 'Error processing image';
+                }
+            };
+            
+            // Create a temporary URL and handle cleanup
+            const fileUrl = URL.createObjectURL(fileInput.files[0]);
+            img.src = fileUrl;
+            img.onload = async function() {
+                try {
+                    await processImageElement(img);
+                    statusDiv.textContent = 'Image loaded and processed!';
+                    URL.revokeObjectURL(fileUrl);  // Clean up after successful load
+                } catch (error) {
+                    console.error('Error processing image:', error);
+                    statusDiv.textContent = 'Error processing image';
+                    URL.revokeObjectURL(fileUrl);  // Clean up even if there's an error
+                }
+            };
         }
 
         function createDisplacementMesh(imageElement, depthCanvas, aspectRatio) {
@@ -667,6 +677,10 @@
                     initialCameraPosition.z = value;
                 });
             trackingFolder.add(controls, 'invertCamera').name('Invert Camera Movement');
+            trackingFolder.add(controls, 'showUI').name('Show UI')
+                .onChange((value) => {
+                    document.body.classList.toggle('hide-ui', !value);
+                });
             
             const imageFolder = gui.addFolder('Image Controls');
             imageFolder.add(controls, 'selectedImage', controls.imageOptions).name('Select Image');
@@ -692,6 +706,14 @@
             
             img.src = controls.selectedImage;
         }
+
+        // Add keyboard listener for 'd' key
+        document.addEventListener('keydown', (event) => {
+            if (event.key.toLowerCase() === 'd') {
+                controls.showUI = !controls.showUI;
+                document.body.classList.toggle('hide-ui', !controls.showUI);
+            }
+        });
     </script>
 </body>
 </html> 
