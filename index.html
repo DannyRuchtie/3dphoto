@@ -140,6 +140,15 @@
         <video id="webcam"></video>
         <canvas id="tracking-overlay"></canvas>
     </div>
+    <div id="upload-modal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); 
+        background: rgba(23, 23, 23, 0.9); padding: 20px; border-radius: 8px; border: 1px solid #1e1e1e; 
+        z-index: 10000; text-align: center; color: #fff; min-width: 200px;">
+        <div id="selected-filename" style="margin-bottom: 15px; word-break: break-word;"></div>
+        <button id="process-image" style="background: rgba(35, 35, 35, 0.8); color: #fff; border: 1px solid #1e1e1e; 
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; margin: 5px 0; font-family: inherit;">Process Image</button>
+        <button id="cancel-upload" style="background: rgba(35, 35, 35, 0.8); color: #fff; border: 1px solid #1e1e1e; 
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; margin: 5px 0; margin-left: 10px; font-family: inherit;">Cancel</button>
+    </div>
 
     <script>
         let scene, camera, renderer;
@@ -158,87 +167,37 @@
             depthStrength: 0.14,
             selectedImage: 'images/example-1.jpeg',
             imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg', 'images/example-4.jpeg', 'images/example-5.jpeg'],
-            loadImage: function() {
-                loadSelectedImage();
+            processImage: function() {
+                if (controls.selectedImage) {
+                    loadSelectedImage();
+                }
             },
-            uploadImage: function() {
-                // Create a temporary file input
+            uploadedImage: null,
+            selectFile: function() {
                 const input = document.createElement('input');
                 input.type = 'file';
                 input.accept = 'image/*';
-                
-                input.addEventListener('change', function() {
+                input.onchange = function() {
                     if (input.files.length > 0) {
-                        const file = input.files[0];
-                        // Create a confirmation dialog
-                        const dialog = document.createElement('div');
-                        dialog.style.cssText = `
-                            position: fixed;
-                            top: 50%;
-                            left: 50%;
-                            transform: translate(-50%, -50%);
-                            background: rgba(23, 23, 23, 0.9);
-                            padding: 20px;
-                            border-radius: 8px;
-                            border: 1px solid #1e1e1e;
-                            z-index: 10000;
-                            text-align: center;
-                            backdrop-filter: blur(10px);
-                            -webkit-backdrop-filter: blur(10px);
-                        `;
-                        
-                        const fileName = document.createElement('div');
-                        fileName.textContent = `Selected: ${file.name}`;
-                        fileName.style.marginBottom = '15px';
-                        dialog.appendChild(fileName);
-                        
-                        const processButton = document.createElement('button');
-                        processButton.textContent = 'Process Image';
-                        processButton.onclick = () => {
-                            // Process the image
-                            const reader = new FileReader();
-                            reader.onload = function(e) {
-                                const img = new Image();
-                                img.crossOrigin = "Anonymous";
-                                
-                                img.onload = function() {
-                                    processImageElement(img).catch(error => {
-                                        console.error('Error processing uploaded image:', error);
-                                    });
-                                };
-                                
-                                img.onerror = function() {
-                                    console.error('Error loading image');
-                                };
-                                
-                                img.src = e.target.result;
-                            };
-                            
-                            reader.onerror = function() {
-                                console.error('Error reading file');
-                            };
-                            
-                            reader.readAsDataURL(file);
-                            // Remove the dialog
-                            document.body.removeChild(dialog);
+                        const reader = new FileReader();
+                        reader.onload = function(e) {
+                            controls.uploadedImage = e.target.result;
+                            updateGUIControllers();
                         };
-                        dialog.appendChild(processButton);
-                        
-                        const cancelButton = document.createElement('button');
-                        cancelButton.textContent = 'Cancel';
-                        cancelButton.style.marginLeft = '10px';
-                        cancelButton.onclick = () => {
-                            document.body.removeChild(dialog);
-                        };
-                        dialog.appendChild(cancelButton);
-                        
-                        document.body.appendChild(dialog);
+                        reader.readAsDataURL(input.files[0]);
                     }
-                });
-                
+                };
                 input.click();
+            },
+            processUploadedImage: function() {
+                if (controls.uploadedImage) {
+                    controls.selectedImage = controls.uploadedImage;
+                    loadSelectedImage();
+                }
             }
         };
+
+        let guiControllers = {};  // Store GUI controllers for updating
 
         const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
 
@@ -724,12 +683,31 @@
                 });
             
             const imageFolder = gui.addFolder('Image Controls');
-            imageFolder.add(controls, 'selectedImage', controls.imageOptions).name('Select Image');
-            imageFolder.add(controls, 'loadImage').name('Load Selected Image');
-            imageFolder.add(controls, 'uploadImage').name('Upload Image');
+            guiControllers.selectedImage = imageFolder.add(controls, 'selectedImage', controls.imageOptions).name('Select Image');
+            guiControllers.processButton = imageFolder.add(controls, 'processImage').name('Process Selected');
+            
+            const uploadFolder = gui.addFolder('Upload Controls');
+            uploadFolder.add(controls, 'selectFile').name('Select File');
+            guiControllers.processUploadButton = uploadFolder.add(controls, 'processUploadedImage').name('Process Uploaded');
             
             trackingFolder.open();
             imageFolder.open();
+            uploadFolder.open();
+            
+            updateGUIControllers();
+        }
+
+        function updateGUIControllers() {
+            if (guiControllers.processButton) {
+                const processButton = guiControllers.processButton.domElement.parentElement;
+                processButton.style.pointerEvents = controls.selectedImage ? 'auto' : 'none';
+                processButton.style.opacity = controls.selectedImage ? '1' : '0.5';
+            }
+            if (guiControllers.processUploadButton) {
+                const uploadButton = guiControllers.processUploadButton.domElement.parentElement;
+                uploadButton.style.pointerEvents = controls.uploadedImage ? 'auto' : 'none';
+                uploadButton.style.opacity = controls.uploadedImage ? '1' : '0.5';
+            }
         }
 
         async function loadSelectedImage() {
