@@ -7,13 +7,25 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.7.4/dist/tf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
     <style>
-        body { margin: 0; }
+        body { 
+            margin: 0; 
+            color: #fff;
+            font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+
+        }
         canvas { display: block; }
+        .dg.ac {
+            position: fixed !important;
+            top: 20px !important;
+            right: 20px !important;
+            margin-right: 20px !important;
+        }
         #webcam-container {
             position: absolute;
             top: 20px;
-            right: 20px;
+            left: 20px;
             width: 160px;
             height: 120px;
             border-radius: 8px;
@@ -35,9 +47,11 @@
         }
         #upload-container {
             position: absolute;
-            top: 20px;
+            height: 113px;
+            bottom: 20px;
             left: 20px;
-            background: rgba(255, 255, 255, 0.8);
+            background: rgba(23, 23, 23, 0.8);
+            border:1px solid #1e1e1e;
             padding: 20px;
             border-radius: 8px;
             z-index: 1000;
@@ -53,10 +67,19 @@
             position: absolute;
             bottom: 20px;
             right: 20px;
-            background: rgba(255, 255, 255, 0.8);
-            padding: 10px;
+            background: rgba(23, 23, 23, 0.8);
+            border:1px solid #1e1e1e;
+            padding: 20px;
             border-radius: 8px;
-            max-width: 200px;
+            width: 200px;
+            height: fit-content;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #previewCanvas {
+            width: 100%;
+            height: auto;
         }
     </style>
 </head>
@@ -69,7 +92,7 @@
     </div>
     <canvas id="tempCanvas"></canvas>
     <div id="depthPreview">
-        <h3>Depth Map Preview</h3>
+
         <canvas id="previewCanvas"></canvas>
     </div>
     <div id="webcam-container">
@@ -85,6 +108,16 @@
         let webcam;
         let initialCameraPosition = { x: 0, y: 0, z: 2.5 };
         let isTrackingEnabled = true;
+        let controls = {
+            xSensitivity: 1.0,
+            ySensitivity: 1.0,
+            smoothing: 0.1,
+            selectedImage: 'temp2.jpg',
+            imageOptions: ['temp.jpg', 'temp2.jpg'],
+            loadImage: function() {
+                loadSelectedImage();
+            }
+        };
 
         const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
 
@@ -185,6 +218,7 @@
             scene.add(directionalLight);
 
             await setupFaceTracking();
+            setupGUI();
 
             animate();
         }
@@ -352,28 +386,7 @@
         });
 
         async function loadDefaultImage() {
-            const statusDiv = document.getElementById('status');
-            statusDiv.textContent = 'Loading default image...';
-
-            const img = new Image();
-            img.crossOrigin = "Anonymous";
-            
-            img.onerror = () => {
-                statusDiv.textContent = 'Failed to load default image';
-            };
-
-            img.onload = async function() {
-                try {
-                    await processImageElement(img);
-                    statusDiv.textContent = 'Default image loaded and processed!';
-                } catch (error) {
-                    console.error('Error processing default image:', error);
-                    statusDiv.textContent = 'Error processing default image';
-                }
-            };
-            
-            // Set default image source
-            img.src = 'temp2.jpg';
+            await loadSelectedImage();
         }
 
         async function predict(model, image) {
@@ -540,21 +553,20 @@
             const centerX = face.topLeft[0] / 160;
             const centerY = face.topLeft[1] / 120;
             
-            // Calculate offsets with increased sensitivity and invert X for natural movement
-            const xOffset = (0.5 - centerX) * 0.5;  // Increased sensitivity and inverted
-            const yOffset = (0.5 - centerY) * 0.5;  // Increased sensitivity
+            // Calculate offsets with adjustable sensitivity
+            const xOffset = (0.5 - centerX) * controls.xSensitivity;
+            const yOffset = (0.5 - centerY) * controls.ySensitivity;
             
             // Calculate target camera position
             const targetX = initialCameraPosition.x + xOffset;
             const targetY = initialCameraPosition.y + yOffset;
             const targetZ = initialCameraPosition.z;
             
-            // Smooth camera movement with lerp
-            camera.position.x += (targetX - camera.position.x) * 0.1;
-            camera.position.y += (targetY - camera.position.y) * 0.1;
+            // Smooth camera movement with adjustable lerp
+            camera.position.x += (targetX - camera.position.x) * controls.smoothing;
+            camera.position.y += (targetY - camera.position.y) * controls.smoothing;
             camera.position.z = targetZ;
             
-            // Always look at the mesh's position
             camera.lookAt(mesh.position);
         }
 
@@ -583,6 +595,38 @@
                 webcamContainer.style.opacity = '1';
                 toggleButton.textContent = 'Disable Face Tracking';
             }
+        }
+
+        function setupGUI() {
+            const gui = new dat.GUI();
+            const trackingFolder = gui.addFolder('Face Tracking Controls');
+            trackingFolder.add(controls, 'xSensitivity', 0.1, 3.0).name('X Sensitivity');
+            trackingFolder.add(controls, 'ySensitivity', 0.1, 3.0).name('Y Sensitivity');
+            trackingFolder.add(controls, 'smoothing', 0.01, 0.5).name('Smoothing');
+            
+            const imageFolder = gui.addFolder('Image Controls');
+            imageFolder.add(controls, 'selectedImage', controls.imageOptions).name('Select Image');
+            imageFolder.add(controls, 'loadImage').name('Load Selected Image');
+            
+            trackingFolder.open();
+            imageFolder.open();
+        }
+
+        async function loadSelectedImage() {
+            const img = new Image();
+            img.crossOrigin = "Anonymous";
+            
+            img.onload = async function() {
+                try {
+                    await processImageElement(img);
+                    document.getElementById('status').textContent = 'Image loaded and processed!';
+                } catch (error) {
+                    console.error('Error processing image:', error);
+                    document.getElementById('status').textContent = 'Error processing image';
+                }
+            };
+            
+            img.src = controls.selectedImage;
         }
     </script>
 </body>
