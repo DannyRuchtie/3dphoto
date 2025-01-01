@@ -3,6 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <meta name="theme-color" content="#000000">
+    <link rel="apple-touch-icon" href="icon.png">
     <title>3D Photo Viewer</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.7.4/dist/tf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -13,10 +17,18 @@
             margin: 0; 
             color: #fff;
             font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            background: #000;
+            height: 100%;
+            width: 100%;
+            position: fixed;
+            overflow: hidden;
+            -webkit-touch-callout: none;
+            -webkit-user-select: none;
+            user-select: none;
         }
         canvas { display: block; }
         button {
-            background: rgba(23, 23, 23, 0.8);
+            background: rgba(35, 35, 35, 0.8);
             color: #fff;
             border: 1px solid #1e1e1e;
             padding: 8px 16px;
@@ -24,10 +36,11 @@
             cursor: pointer;
             margin: 5px 0;
             font-family: inherit;
-            background: #000;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         button:hover {
-            background: rgba(35, 35, 35, 0.8);
+            background: rgba(45, 45, 45, 0.8);
         }
         input[type="file"] {
             color: #fff;
@@ -68,11 +81,13 @@
             height: 113px;
             bottom: 20px;
             left: 20px;
-            background: rgba(23, 23, 23, 0.8);
-            border:1px solid #1e1e1e;
+            background: rgba(23, 23, 23, 0.7);
+            border: 1px solid #1e1e1e;
             padding: 20px;
             border-radius: 8px;
             z-index: 1000;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         #status {
             margin-top: 10px;
@@ -85,8 +100,8 @@
             position: absolute;
             bottom: 20px;
             right: 20px;
-            background: rgba(23, 23, 23, 0.8);
-            border:1px solid #1e1e1e;
+            background: rgba(23, 23, 23, 0.7);
+            border: 1px solid #1e1e1e;
             padding: 20px;
             border-radius: 8px;
             width: 200px;
@@ -94,6 +109,8 @@
             display: flex;
             align-items: center;
             justify-content: center;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
         }
         #previewCanvas {
             width: 100%;
@@ -102,6 +119,24 @@
         }
         canvas.webgl {
             border-radius: 8px;
+        }
+        .dg.main {
+            background: rgba(23, 23, 23, 0.7) !important;
+            backdrop-filter: blur(10px) !important;
+            -webkit-backdrop-filter: blur(10px) !important;
+        }
+        .dg .close-button {
+            background-color: rgba(35, 35, 35, 0.8) !important;
+        }
+        .dg .cr.number input[type=text] {
+            background: #1e1e1e !important;
+            color: #fff !important;
+        }
+        @media (display-mode: standalone) {
+            body {
+                padding-top: env(safe-area-inset-top);
+                padding-bottom: env(safe-area-inset-bottom);
+            }
         }
     </style>
 </head>
@@ -134,8 +169,8 @@
             xSensitivity: 1.0,
             ySensitivity: 1.0,
             smoothing: 0.1,
-            selectedImage: 'temp2.jpg',
-            imageOptions: ['temp.jpg', 'temp2.jpg'],
+            selectedImage: 'images/example-1.jpeg',
+            imageOptions: ['images/example-2.jpeg', 'images/example-3.jpeg', 'images/example-4.jpeg', 'images/example-5.jpeg', 'images/example-6.jpeg'],
             loadImage: function() {
                 loadSelectedImage();
             }
