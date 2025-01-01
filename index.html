@@ -182,7 +182,18 @@
                         const reader = new FileReader();
                         reader.onload = function(e) {
                             controls.uploadedImage = e.target.result;
-                            updateGUIControllers();
+                            // Force GUI update for Safari
+                            setTimeout(() => {
+                                const uploadButton = guiControllers.processUploadButton.domElement.parentElement;
+                                if (uploadButton) {
+                                    uploadButton.style.pointerEvents = 'auto';
+                                    uploadButton.style.opacity = '1';
+                                    // Force Safari to repaint
+                                    uploadButton.style.display = 'none';
+                                    uploadButton.offsetHeight; // Force reflow
+                                    uploadButton.style.display = 'block';
+                                }
+                            }, 100);
                         };
                         reader.readAsDataURL(input.files[0]);
                     }
@@ -698,16 +709,29 @@
         }
 
         function updateGUIControllers() {
-            if (guiControllers.processButton) {
-                const processButton = guiControllers.processButton.domElement.parentElement;
-                processButton.style.pointerEvents = controls.selectedImage ? 'auto' : 'none';
-                processButton.style.opacity = controls.selectedImage ? '1' : '0.5';
-            }
-            if (guiControllers.processUploadButton) {
-                const uploadButton = guiControllers.processUploadButton.domElement.parentElement;
-                uploadButton.style.pointerEvents = controls.uploadedImage ? 'auto' : 'none';
-                uploadButton.style.opacity = controls.uploadedImage ? '1' : '0.5';
-            }
+            // Force update for Safari compatibility
+            setTimeout(() => {
+                if (guiControllers.processButton) {
+                    const processButton = guiControllers.processButton.domElement.parentElement;
+                    if (processButton) {
+                        processButton.style.pointerEvents = controls.selectedImage ? 'auto' : 'none';
+                        processButton.style.opacity = controls.selectedImage ? '1' : '0.5';
+                        processButton.style.display = 'none';
+                        processButton.offsetHeight; // Force reflow
+                        processButton.style.display = 'block';
+                    }
+                }
+                if (guiControllers.processUploadButton) {
+                    const uploadButton = guiControllers.processUploadButton.domElement.parentElement;
+                    if (uploadButton) {
+                        uploadButton.style.pointerEvents = controls.uploadedImage ? 'auto' : 'none';
+                        uploadButton.style.opacity = controls.uploadedImage ? '1' : '0.5';
+                        uploadButton.style.display = 'none';
+                        uploadButton.offsetHeight; // Force reflow
+                        uploadButton.style.display = 'block';
+                    }
+                }
+            }, 100);
         }
 
         async function loadSelectedImage() {
