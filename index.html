@@ -144,7 +144,6 @@
     <div id="upload-container">
         <input type="file" id="imageInput" accept="image/*">
         <button onclick="processImage()">Process & View in 3D</button>
-        <button onclick="toggleTracking()">Toggle Face Tracking</button>
         <div id="status"></div>
     </div>
     <canvas id="tempCanvas"></canvas>
@@ -164,13 +163,14 @@
         let faceDetector;
         let webcam;
         let initialCameraPosition = { x: 0, y: 0, z: 2.5 };
-        let isTrackingEnabled = true;
         let controls = {
             xSensitivity: 1.0,
             ySensitivity: 1.0,
             smoothing: 0.1,
+            cameraDistance: 2,
+            invertCamera: false,
             selectedImage: 'images/example-1.jpeg',
-            imageOptions: ['images/example-2.jpeg', 'images/example-3.jpeg', 'images/example-4.jpeg', 'images/example-5.jpeg'],
+            imageOptions: ['images/example-1.jpeg', 'images/example-2.jpeg', 'images/example-3.jpeg', 'images/example-4.jpeg', 'images/example-5.jpeg'],
             loadImage: function() {
                 loadSelectedImage();
             }
@@ -265,8 +265,8 @@
             renderer.domElement.classList.add('webgl');
             document.body.appendChild(renderer.domElement);
 
-            camera.position.z = 2.5;
-            initialCameraPosition = { x: 0, y: 0, z: 2.5 };
+            camera.position.z = controls.cameraDistance;
+            initialCameraPosition = { x: 0, y: 0, z: controls.cameraDistance };
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
@@ -589,31 +589,29 @@
             const video = document.getElementById('webcam');
             
             async function detect() {
-                if (isTrackingEnabled) {
-                    const faces = await faceDetector.estimateFaces(video, false);
-                    // Clear previous frame
-                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                const faces = await faceDetector.estimateFaces(video, false);
+                // Clear previous frame
+                ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                
+                if (faces.length > 0) {
+                    const face = faces[0];
+                    onResults(face);
                     
-                    if (faces.length > 0) {
-                        const face = faces[0];
-                        onResults(face);
-                        
-                        // Draw tracking box
-                        ctx.strokeStyle = '#00ff00';
-                        ctx.lineWidth = 2;
-                        const startX = face.topLeft[0];
-                        const startY = face.topLeft[1];
-                        const width = face.bottomRight[0] - face.topLeft[0];
-                        const height = face.bottomRight[1] - face.topLeft[1];
-                        ctx.strokeRect(startX, startY, width, height);
-                        
-                        // Draw tracking info
-                        ctx.fillStyle = 'white';
-                        ctx.font = '10px Arial';
-                        ctx.fillText(`X: ${Math.round(startX)}`, 5, 15);
-                        ctx.fillText(`Y: ${Math.round(startY)}`, 5, 30);
-                        ctx.fillText(`Size: ${Math.round(width)}x${Math.round(height)}`, 5, 45);
-                    }
+                    // Draw tracking box
+                    ctx.strokeStyle = '#00ff00';
+                    ctx.lineWidth = 2;
+                    const startX = face.topLeft[0];
+                    const startY = face.topLeft[1];
+                    const width = face.bottomRight[0] - face.topLeft[0];
+                    const height = face.bottomRight[1] - face.topLeft[1];
+                    ctx.strokeRect(startX, startY, width, height);
+                    
+                    // Draw tracking info
+                    ctx.fillStyle = 'white';
+                    ctx.font = '10px Arial';
+                    ctx.fillText(`X: ${Math.round(startX)}`, 5, 15);
+                    ctx.fillText(`Y: ${Math.round(startY)}`, 5, 30);
+                    ctx.fillText(`Size: ${Math.round(width)}x${Math.round(height)}`, 5, 45);
                 }
                 requestAnimationFrame(detect);
             }
@@ -622,19 +620,20 @@
         }
 
         function onResults(face) {
-            if (!isTrackingEnabled || !face || !mesh) return;
+            if (!face || !mesh) return;
             
             const centerX = face.topLeft[0] / 160;
             const centerY = face.topLeft[1] / 120;
             
-            // Calculate offsets with adjustable sensitivity
-            const xOffset = (centerX - 0.5) * controls.xSensitivity;
-            const yOffset = (centerY - 0.5) * controls.ySensitivity;
+            // Calculate offsets with adjustable sensitivity and direction
+            const direction = controls.invertCamera ? -1 : 1;
+            const xOffset = direction * (centerX - 0.5) * controls.xSensitivity;
+            const yOffset = direction * (centerY - 0.5) * controls.ySensitivity;
             
             // Calculate target camera position
             const targetX = initialCameraPosition.x + xOffset;
             const targetY = initialCameraPosition.y + yOffset;
-            const targetZ = initialCameraPosition.z;
+            const targetZ = controls.cameraDistance;
             
             // Smooth camera movement with adjustable lerp
             camera.position.x += (targetX - camera.position.x) * controls.smoothing;
@@ -644,39 +643,17 @@
             camera.lookAt(mesh.position);
         }
 
-        function toggleTracking() {
-            isTrackingEnabled = !isTrackingEnabled;
-            const webcamContainer = document.getElementById('webcam-container');
-            const toggleButton = document.querySelector('button:nth-child(2)');
-            
-            if (!isTrackingEnabled) {
-                // Reset camera position when tracking is disabled
-                camera.position.set(
-                    initialCameraPosition.x,
-                    initialCameraPosition.y,
-                    initialCameraPosition.z
-                );
-                camera.lookAt(scene.position);
-                
-                // Reset mesh rotation if mesh exists
-                if (mesh) {
-                    mesh.rotation.set(0, 0, 0);
-                }
-                
-                webcamContainer.style.opacity = '0.3';
-                toggleButton.textContent = 'Enable Face Tracking';
-            } else {
-                webcamContainer.style.opacity = '1';
-                toggleButton.textContent = 'Disable Face Tracking';
-            }
-        }
-
         function setupGUI() {
             const gui = new dat.GUI();
             const trackingFolder = gui.addFolder('Face Tracking Controls');
             trackingFolder.add(controls, 'xSensitivity', 0.1, 3.0).name('X Sensitivity');
             trackingFolder.add(controls, 'ySensitivity', 0.1, 3.0).name('Y Sensitivity');
             trackingFolder.add(controls, 'smoothing', 0.01, 0.5).name('Smoothing');
+            trackingFolder.add(controls, 'cameraDistance', 0.5, 3.0).name('Camera Distance')
+                .onChange((value) => {
+                    initialCameraPosition.z = value;
+                });
+            trackingFolder.add(controls, 'invertCamera').name('Invert Camera Movement');
             
             const imageFolder = gui.addFolder('Image Controls');
             imageFolder.add(controls, 'selectedImage', controls.imageOptions).name('Select Image');
