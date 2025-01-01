@@ -9,13 +9,31 @@
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dat-gui/0.7.9/dat.gui.min.js"></script>
     <style>
-        body { 
+       html,body { 
             margin: 0; 
             color: #fff;
             font-family: system-ui, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
-
         }
         canvas { display: block; }
+        button {
+            background: rgba(23, 23, 23, 0.8);
+            color: #fff;
+            border: 1px solid #1e1e1e;
+            padding: 8px 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px 0;
+            font-family: inherit;
+            background: #000;
+        }
+        button:hover {
+            background: rgba(35, 35, 35, 0.8);
+        }
+        input[type="file"] {
+            color: #fff;
+            margin-bottom: 10px;
+            width: 100%;
+        }
         .dg.ac {
             position: fixed !important;
             top: 20px !important;
@@ -72,7 +90,7 @@
             padding: 20px;
             border-radius: 8px;
             width: 200px;
-            height: fit-content;
+            height: 115px;
             display: flex;
             align-items: center;
             justify-content: center;
@@ -80,6 +98,10 @@
         #previewCanvas {
             width: 100%;
             height: auto;
+            border-radius: 8px;
+        }
+        canvas.webgl {
+            border-radius: 8px;
         }
     </style>
 </head>
@@ -205,6 +227,7 @@
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.domElement.classList.add('webgl');
             document.body.appendChild(renderer.domElement);
 
             camera.position.z = 2.5;
@@ -296,6 +319,50 @@
             depthTexture.magFilter = THREE.LinearFilter;
             depthTexture.needsUpdate = true;
 
+            // Create clipping shader
+            const vertexShader = `
+                varying vec2 vUv;
+                varying vec3 vPosition;
+                uniform sampler2D displacementMap;
+                uniform float displacementScale;
+                uniform float displacementBias;
+                void main() {
+                    vUv = uv;
+                    vPosition = position;
+                    vec4 displacement = texture2D(displacementMap, uv);
+                    vec3 newPosition = position + normal * (displacement.r * displacementScale + displacementBias);
+                    gl_Position = projectionMatrix * modelViewMatrix * vec4(newPosition, 1.0);
+                }
+            `;
+
+            const fragmentShader = `
+                uniform sampler2D map;
+                uniform sampler2D displacementMap;
+                varying vec2 vUv;
+                varying vec3 vPosition;
+                
+                void main() {
+                    vec2 uv = vUv;
+                    vec4 color = texture2D(map, uv);
+                    
+                    // Simple rectangle with rounded corners
+                    float cornerRadius = 0.02;  // Adjust this for more/less rounding
+                    vec2 halfSize = vec2(0.5);
+                    vec2 edgeDistance = abs(vUv - 0.5);
+                    
+                    if (max(edgeDistance.x - (halfSize.x - cornerRadius), 
+                           edgeDistance.y - (halfSize.y - cornerRadius)) > 0.0) {
+                        // Check if we're outside the rounded rectangle
+                        vec2 cornerEdgeDistance = max(edgeDistance - halfSize + cornerRadius, 0.0);
+                        if (length(cornerEdgeDistance) > cornerRadius) {
+                            discard;
+                        }
+                    }
+                    
+                    gl_FragColor = color;
+                }
+            `;
+
             if (mesh) {
                 scene.remove(mesh);
             }
@@ -308,16 +375,17 @@
                 Math.min(512, Math.round(512 * aspectRatio)),
                 Math.min(512, Math.round(512 / aspectRatio))
             );
-            const material = new THREE.MeshPhongMaterial({
-                map: texture,
-                displacementMap: depthTexture,
-                displacementScale: 0.15,
-                displacementBias: -0.15,
+
+            const material = new THREE.ShaderMaterial({
+                uniforms: {
+                    map: { value: texture },
+                    displacementMap: { value: depthTexture },
+                    displacementScale: { value: 0.15 },
+                    displacementBias: { value: -0.15 }
+                },
+                vertexShader: vertexShader,
+                fragmentShader: fragmentShader,
                 side: THREE.DoubleSide,
-                flatShading: false,
-                roughness: 0.5,
-                metalness: 0.1,
-                shininess: 0
             });
 
             mesh = new THREE.Mesh(geometry, material);
