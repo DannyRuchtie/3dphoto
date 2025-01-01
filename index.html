@@ -6,9 +6,32 @@
     <title>3D Photo Viewer</title>
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.7.4/dist/tf.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface@0.0.7"></script>
     <style>
         body { margin: 0; }
         canvas { display: block; }
+        #webcam-container {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 160px;
+            height: 120px;
+            border-radius: 8px;
+            overflow: hidden;
+            z-index: 1000;
+        }
+        #webcam {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #tracking-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
         #upload-container {
             position: absolute;
             top: 20px;
@@ -40,6 +63,7 @@
     <div id="upload-container">
         <input type="file" id="imageInput" accept="image/*">
         <button onclick="processImage()">Process & View in 3D</button>
+        <button onclick="toggleTracking()">Toggle Face Tracking</button>
         <div id="status"></div>
     </div>
     <canvas id="tempCanvas"></canvas>
@@ -47,11 +71,19 @@
         <h3>Depth Map Preview</h3>
         <canvas id="previewCanvas"></canvas>
     </div>
+    <div id="webcam-container">
+        <video id="webcam"></video>
+        <canvas id="tracking-overlay"></canvas>
+    </div>
 
     <script>
         let scene, camera, renderer;
         let mesh;
         let model;
+        let faceDetector;
+        let webcam;
+        let initialCameraPosition = { x: 0, y: 0, z: 2.5 };
+        let isTrackingEnabled = true;
 
         const CORS_PROXY = 'https://cors-anywhere.herokuapp.com/';
 
@@ -134,7 +166,7 @@
             }
         }
 
-        function init() {
+        async function init() {
             scene = new THREE.Scene();
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -142,6 +174,7 @@
             document.body.appendChild(renderer.domElement);
 
             camera.position.z = 2.5;
+            initialCameraPosition = { x: 0, y: 0, z: 2.5 };
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
             scene.add(ambientLight);
@@ -149,6 +182,8 @@
             const directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
             directionalLight.position.set(5, 5, 5);
             scene.add(directionalLight);
+
+            await setupFaceTracking();
 
             animate();
         }
@@ -258,9 +293,6 @@
 
         function animate() {
             requestAnimationFrame(animate);
-            if (mesh) {
-                mesh.rotation.y += 0.005;
-            }
             renderer.render(scene, camera);
         }
 
@@ -431,6 +463,103 @@
 
             // Update your mesh with the new material
             // ... rest of your Three.js code
+        }
+
+        async function setupFaceTracking() {
+            const video = document.getElementById('webcam');
+            const overlay = document.getElementById('tracking-overlay');
+            overlay.width = 160;
+            overlay.height = 120;
+            const ctx = overlay.getContext('2d');
+            
+            // Load BlazeFace model
+            faceDetector = await blazeface.load();
+            
+            // Setup webcam
+            video.width = 160;
+            video.height = 120;
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    'video': {
+                        width: 160,
+                        height: 120
+                    }
+                });
+                video.srcObject = stream;
+                await video.play();
+            } catch (error) {
+                console.error('Error accessing webcam:', error);
+                return;
+            }
+            
+            // Start detection loop
+            detectFaces(ctx);
+        }
+
+        async function detectFaces(ctx) {
+            const video = document.getElementById('webcam');
+            
+            async function detect() {
+                if (isTrackingEnabled) {
+                    const faces = await faceDetector.estimateFaces(video, false);
+                    // Clear previous frame
+                    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+                    
+                    if (faces.length > 0) {
+                        const face = faces[0];
+                        onResults(face);
+                        
+                        // Draw tracking box
+                        ctx.strokeStyle = '#00ff00';
+                        ctx.lineWidth = 2;
+                        const startX = face.topLeft[0];
+                        const startY = face.topLeft[1];
+                        const width = face.bottomRight[0] - face.topLeft[0];
+                        const height = face.bottomRight[1] - face.topLeft[1];
+                        ctx.strokeRect(startX, startY, width, height);
+                        
+                        // Draw tracking info
+                        ctx.fillStyle = 'white';
+                        ctx.font = '10px Arial';
+                        ctx.fillText(`X: ${Math.round(startX)}`, 5, 15);
+                        ctx.fillText(`Y: ${Math.round(startY)}`, 5, 30);
+                        ctx.fillText(`Size: ${Math.round(width)}x${Math.round(height)}`, 5, 45);
+                    }
+                }
+                requestAnimationFrame(detect);
+            }
+            
+            detect();
+        }
+
+        function onResults(face) {
+            if (!isTrackingEnabled || !face) return;
+            
+            const centerX = face.topLeft[0] / 160;
+            const centerY = face.topLeft[1] / 120;
+            
+            // Calculate offsets with reduced sensitivity
+            const xOffset = (centerX - 0.5) * 0.03;
+            const yOffset = (centerY - 0.5) * 0.03;
+            
+            // Update camera position smoothly with lerp
+            camera.position.x += (initialCameraPosition.x + xOffset - camera.position.x) * 0.1;
+            camera.position.y += (initialCameraPosition.y - yOffset - camera.position.y) * 0.1;
+            camera.lookAt(scene.position);
+        }
+
+        function toggleTracking() {
+            isTrackingEnabled = !isTrackingEnabled;
+            if (!isTrackingEnabled) {
+                // Reset camera position when tracking is disabled
+                camera.position.set(
+                    initialCameraPosition.x,
+                    initialCameraPosition.y,
+                    initialCameraPosition.z
+                );
+                camera.lookAt(scene.position);
+            }
         }
     </script>
 </body>
