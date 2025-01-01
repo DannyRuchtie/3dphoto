@@ -19,6 +19,7 @@
             border-radius: 8px;
             overflow: hidden;
             z-index: 1000;
+            transition: opacity 0.3s ease;
         }
         #webcam {
             width: 100%;
@@ -534,23 +535,34 @@
         }
 
         function onResults(face) {
-            if (!isTrackingEnabled || !face) return;
+            if (!isTrackingEnabled || !face || !mesh) return;
             
             const centerX = face.topLeft[0] / 160;
             const centerY = face.topLeft[1] / 120;
             
-            // Calculate offsets with reduced sensitivity
-            const xOffset = (centerX - 0.5) * 0.03;
-            const yOffset = (centerY - 0.5) * 0.03;
+            // Calculate offsets with increased sensitivity and invert X for natural movement
+            const xOffset = (0.5 - centerX) * 0.5;  // Increased sensitivity and inverted
+            const yOffset = (0.5 - centerY) * 0.5;  // Increased sensitivity
             
-            // Update camera position smoothly with lerp
-            camera.position.x += (initialCameraPosition.x + xOffset - camera.position.x) * 0.1;
-            camera.position.y += (initialCameraPosition.y - yOffset - camera.position.y) * 0.1;
-            camera.lookAt(scene.position);
+            // Calculate target camera position
+            const targetX = initialCameraPosition.x + xOffset;
+            const targetY = initialCameraPosition.y + yOffset;
+            const targetZ = initialCameraPosition.z;
+            
+            // Smooth camera movement with lerp
+            camera.position.x += (targetX - camera.position.x) * 0.1;
+            camera.position.y += (targetY - camera.position.y) * 0.1;
+            camera.position.z = targetZ;
+            
+            // Always look at the mesh's position
+            camera.lookAt(mesh.position);
         }
 
         function toggleTracking() {
             isTrackingEnabled = !isTrackingEnabled;
+            const webcamContainer = document.getElementById('webcam-container');
+            const toggleButton = document.querySelector('button:nth-child(2)');
+            
             if (!isTrackingEnabled) {
                 // Reset camera position when tracking is disabled
                 camera.position.set(
@@ -559,6 +571,17 @@
                     initialCameraPosition.z
                 );
                 camera.lookAt(scene.position);
+                
+                // Reset mesh rotation if mesh exists
+                if (mesh) {
+                    mesh.rotation.set(0, 0, 0);
+                }
+                
+                webcamContainer.style.opacity = '0.3';
+                toggleButton.textContent = 'Enable Face Tracking';
+            } else {
+                webcamContainer.style.opacity = '1';
+                toggleButton.textContent = 'Disable Face Tracking';
             }
         }
     </script>
