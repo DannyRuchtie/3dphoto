@@ -2,8 +2,7 @@
 
 A web-based application that converts 2D images into interactive 3D views controlled by face movements. This project combines depth estimation, face tracking, and 3D rendering to create an immersive viewing experience.
 
-![Depth Map Preview](/images/screen-2.png)
-
+![3D Photo Effect](/images/spatial.gif)
 
 ## Features
 
@@ -12,6 +11,9 @@ A web-based application that converts 2D images into interactive 3D views contro
 - **Interactive Controls**: Fine-tune the experience with an intuitive control panel
 - **Mobile-Ready**: Optimized for iOS web app installation with proper status bar handling
 - **Dark Theme**: Modern dark interface with blur effects and rounded corners
+- **Z-axis Movement**: Adjusts camera distance based on face size
+
+![Depth Map Preview](/images/screen-2.png)
 
 ## How It Works
 
