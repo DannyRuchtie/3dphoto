@@ -750,6 +750,9 @@
             guiControllers.processButton = imageFolder.add(controls, 'processImage').name('Process Selected');
             
             const uploadFolder = gui.addFolder('Upload Controls');
+            const dragDropInfo = { info: 'Drag & Drop anywhere to upload' };
+            uploadFolder.add(dragDropInfo, 'info').name('💡 Tip').listen();
+            
             uploadFolder.add(controls, 'selectFile').name('Select File');
             uploadFolder.add(controls, 'processUploadedImage').name('Process Uploaded');
             
