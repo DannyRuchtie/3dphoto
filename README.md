@@ -11,7 +11,6 @@ A web-based application that converts 2D images into interactive 3D views contro
 - **Real-time Face Tracking**: Uses your webcam to track face movements and control the camera view
 - **Depth Map Generation**: Converts 2D images into 3D using AI-powered depth estimation
 - **Interactive Controls**: Fine-tune the experience with an intuitive control panel
-- **Mobile-Ready**: Optimized for iOS web app installation with proper status bar handling
 - **Dark Theme**: Modern dark interface with blur effects and rounded corners
 - **Z-axis Movement**: Adjusts camera distance based on face size
 
@@ -83,7 +82,7 @@ A web-based application that converts 2D images into interactive 3D views contro
 4. Adjust controls as needed for optimal experience
 
 ## Image Credits
-Danny Ruchtie abd Unsplash
+Danny Ruchtie and Unsplash
 
 Sample images provided by [Unsplash](https://unsplash.com)
 - Example images used under the Unsplash License
@@ -114,13 +113,8 @@ Requires:
 - Mobile gesture controls
 - Batch processing support
 
-## License
-
-[Your chosen license]
-
 ## Acknowledgments
 
 - TensorFlow.js team for the ML capabilities
 - Three.js community for 3D rendering
 - Unsplash for sample images
-- [Other acknowledgments]
