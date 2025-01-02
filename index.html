@@ -143,9 +143,12 @@
             font-size: 1.5em;
             backdrop-filter: blur(10px);
             -webkit-backdrop-filter: blur(10px);
+            opacity: 0;
+            transition: opacity 0.2s ease;
         }
         .drag-overlay.active {
             display: flex;
+            opacity: 1;
         }
     </style>
 </head>
@@ -776,6 +779,7 @@
 
         // Add drag and drop support
         const dragOverlay = document.querySelector('.drag-overlay');
+        let dragCounter = 0;
         
         ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
             document.body.addEventListener(eventName, preventDefaults, false);
@@ -786,12 +790,24 @@
             e.stopPropagation();
         }
         
-        ['dragenter', 'dragover'].forEach(eventName => {
-            document.body.addEventListener(eventName, highlight, false);
+        document.body.addEventListener('dragenter', function(e) {
+            dragCounter++;
+            if (dragCounter === 1) {
+                highlight(e);
+            }
         });
         
-        ['dragleave', 'drop'].forEach(eventName => {
-            document.body.addEventListener(eventName, unhighlight, false);
+        document.body.addEventListener('dragleave', function(e) {
+            dragCounter--;
+            if (dragCounter === 0) {
+                unhighlight(e);
+            }
+        });
+        
+        document.body.addEventListener('drop', function(e) {
+            dragCounter = 0;
+            unhighlight(e);
+            handleDrop(e);
         });
         
         function highlight(e) {
@@ -801,8 +817,6 @@
         function unhighlight(e) {
             dragOverlay.classList.remove('active');
         }
-        
-        document.body.addEventListener('drop', handleDrop, false);
         
         function handleDrop(e) {
             const dt = e.dataTransfer;
