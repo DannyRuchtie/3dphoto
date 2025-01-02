@@ -129,6 +129,24 @@
         .hide-ui .dg.ac {
             display: none !important;
         }
+        .drag-overlay {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(23, 23, 23, 0.9);
+            z-index: 10000;
+            justify-content: center;
+            align-items: center;
+            font-size: 1.5em;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+        }
+        .drag-overlay.active {
+            display: flex;
+        }
     </style>
 </head>
 <body>
@@ -148,6 +166,9 @@
             padding: 8px 16px; border-radius: 8px; cursor: pointer; margin: 5px 0; font-family: inherit;">Process Image</button>
         <button id="cancel-upload" style="background: rgba(35, 35, 35, 0.8); color: #fff; border: 1px solid #1e1e1e; 
             padding: 8px 16px; border-radius: 8px; cursor: pointer; margin: 5px 0; margin-left: 10px; font-family: inherit;">Cancel</button>
+    </div>
+    <div class="drag-overlay">
+        Drop image here to process
     </div>
 
     <script>
@@ -178,33 +199,39 @@
                 const input = document.createElement('input');
                 input.type = 'file';
                 input.accept = 'image/*';
-                input.onchange = function() {
-                    if (input.files.length > 0) {
+                let fileSelected = false;
+                
+                input.addEventListener('change', function(e) {
+                    fileSelected = true;
+                    if (e.target.files && e.target.files.length > 0) {
                         const reader = new FileReader();
                         reader.onload = function(e) {
-                            controls.uploadedImage = e.target.result;
-                            // Force GUI update for Safari
-                            setTimeout(() => {
-                                const uploadButton = guiControllers.processUploadButton.domElement.parentElement;
-                                if (uploadButton) {
-                                    uploadButton.style.pointerEvents = 'auto';
-                                    uploadButton.style.opacity = '1';
-                                    // Force Safari to repaint
-                                    uploadButton.style.display = 'none';
-                                    uploadButton.offsetHeight; // Force reflow
-                                    uploadButton.style.display = 'block';
-                                }
-                            }, 100);
+                            if (e.target.result) {
+                                controls.uploadedImage = e.target.result;
+                                console.log('File loaded successfully');
+                            }
                         };
-                        reader.readAsDataURL(input.files[0]);
+                        reader.onerror = function(e) {
+                            console.error('Error reading file:', e);
+                            alert('Error reading the selected file');
+                        };
+                        reader.readAsDataURL(e.target.files[0]);
                     }
-                };
+                });
+                
+                setTimeout(() => {
+                    if (!fileSelected) {
+                        console.log('No file selected or Safari cancelled');
+                    }
+                }, 1000);
                 input.click();
             },
             processUploadedImage: function() {
                 if (controls.uploadedImage) {
                     controls.selectedImage = controls.uploadedImage;
                     loadSelectedImage();
+                } else {
+                    alert('No image selected. Please click "Select File" and choose an image first.');
                 }
             }
         };
@@ -717,39 +744,11 @@
             
             const uploadFolder = gui.addFolder('Upload Controls');
             uploadFolder.add(controls, 'selectFile').name('Select File');
-            guiControllers.processUploadButton = uploadFolder.add(controls, 'processUploadedImage').name('Process Uploaded');
+            uploadFolder.add(controls, 'processUploadedImage').name('Process Uploaded');
             
             trackingFolder.open();
             imageFolder.open();
             uploadFolder.open();
-            
-            updateGUIControllers();
-        }
-
-        function updateGUIControllers() {
-            // Force update for Safari compatibility
-            setTimeout(() => {
-                if (guiControllers.processButton) {
-                    const processButton = guiControllers.processButton.domElement.parentElement;
-                    if (processButton) {
-                        processButton.style.pointerEvents = controls.selectedImage ? 'auto' : 'none';
-                        processButton.style.opacity = controls.selectedImage ? '1' : '0.5';
-                        processButton.style.display = 'none';
-                        processButton.offsetHeight; // Force reflow
-                        processButton.style.display = 'block';
-                    }
-                }
-                if (guiControllers.processUploadButton) {
-                    const uploadButton = guiControllers.processUploadButton.domElement.parentElement;
-                    if (uploadButton) {
-                        uploadButton.style.pointerEvents = controls.uploadedImage ? 'auto' : 'none';
-                        uploadButton.style.opacity = controls.uploadedImage ? '1' : '0.5';
-                        uploadButton.style.display = 'none';
-                        uploadButton.offsetHeight; // Force reflow
-                        uploadButton.style.display = 'block';
-                    }
-                }
-            }, 100);
         }
 
         async function loadSelectedImage() {
@@ -774,6 +773,58 @@
                 document.body.classList.toggle('hide-ui', !controls.showUI);
             }
         });
+
+        // Add drag and drop support
+        const dragOverlay = document.querySelector('.drag-overlay');
+        
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            document.body.addEventListener(eventName, highlight, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            document.body.addEventListener(eventName, unhighlight, false);
+        });
+        
+        function highlight(e) {
+            dragOverlay.classList.add('active');
+        }
+        
+        function unhighlight(e) {
+            dragOverlay.classList.remove('active');
+        }
+        
+        document.body.addEventListener('drop', handleDrop, false);
+        
+        function handleDrop(e) {
+            const dt = e.dataTransfer;
+            const file = dt.files[0];
+            
+            if (file && file.type.startsWith('image/')) {
+                const reader = new FileReader();
+                reader.onload = function(e) {
+                    if (e.target.result) {
+                        controls.uploadedImage = e.target.result;
+                        controls.processUploadedImage();
+                    }
+                };
+                reader.onerror = function(e) {
+                    console.error('Error reading dropped file:', e);
+                    alert('Error reading the dropped file');
+                };
+                reader.readAsDataURL(file);
+            } else {
+                alert('Please drop an image file');
+            }
+        }
     </script>
 </body>
 </html> 
