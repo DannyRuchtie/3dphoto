@@ -2,7 +2,7 @@
 
 A web-based application that converts 2D images into interactive 3D views controlled by face movements. This project combines depth estimation, face tracking, and 3D rendering to create an immersive viewing experience.
 
-[🚀 Live Demo](https://dannyruchtie.com/spatial/)
+[🚀 Live Demo](https://dannyruchtie.com/special/spatial/)
 
 ![3D Photo Effect](/images/spatial.gif)
 
